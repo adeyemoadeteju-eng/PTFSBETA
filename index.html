@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <!-- Basic Meta Tags -->
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="author" content="24RADAR">
+      <meta name="robots" content="index, follow">
+      <meta name="description" content="24RADAR — live ATC24 radar, traffic, flight plans and controllers.">
+      <meta name="keywords" content="24RADAR, air traffic, ATC, Flight Radar, aviation, radar, flight plan, ATC24, live map">
+      <meta name="theme-color" content="#3b6cec">
+   
+      <!-- Open Graph / Facebook / Discord -->
+      <meta property="og:title" content="24RADAR">
+      <meta property="og:description" content="24RADAR — live ATC24 radar, traffic, flight plans and controllers.">
+      <meta property="og:type" content="website">
+      <meta property="og:url" content="/">
+      <meta property="og:image" content="//assets/Icons/24RADAR-preview.png">
+      <meta property="og:image:width" content="1200">
+      <meta property="og:image:height" content="400">
+   
+      <!-- Twitter Card / NOT X-->
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:title" content="24RADAR">
+      <meta name="twitter:description" content="24RADAR — live ATC24 radar, traffic, flight plans and controllers.">
+      <meta name="twitter:image" content="//assets/Icons/24RADAR-preview.png">
+   
+      <!-- Canonical Link -->
+      <link rel="canonical" href="//">
+   
+      <!-- Favicon -->
+      <link rel="icon" href="//assets/Icons/24RADAR-logo.png" type="image/png">
+      <title>24RADAR</title>
+      <link rel="stylesheet" href="assets/styles.css">
+   </head>
+   <body>
+      <!-- Cabeçalho -->
+      <header>
+         <a href="/" class="radar-home">
+            <span class="RADAR-logo">24RADAR</span>
+         </a>
+         <div class="header-left-buttons">
+            <button class="fpl-button" id="FlpButton" onclick="toggleFlpMenu()">
+               <img src="assets/Icons/map-svgrepo-com.svg" class="fpl-icon" id="FlpIcon">
+               Flight Plan
+            </button>
+            <button class="atc-left-button" id="statsButton" type="button">
+               <span class="header-text-icon">▤</span>
+               Stats
+            </button>
+         </div>
+         <div class="header-buttons">
+            <div class="atc-online">
+               <span class="online-number" id="onlineNumber">0</span>ATC
+            </div>
+            <div class="mapUpdateTime" id="mapUpdateTime">
+               Map last update:<span class="time" id="mapLastUpdate">Loading</span>
+            </div>
+            <!-- Botão da Wiki -->
+            <button class="header-button2" id="fitButton2" type="button" title="Fit traffic">◫</button><!--
+               <img src="assets/Icons/book-open-svgrepo-com.svg" class="icon">
+            </button>
+            <!-- Botão do GitHub -->
+            <button class="header-button2" id="radarRefreshButton" type="button" title="Refresh now">↻</button><!--
+               <img src="assets/Icons/github-142-svgrepo-com.svg" class="icon">
+            </button>
+            <!-- Botão do Discord -->
+            <button class="header-button2" id="controllersButton" type="button" title="Controllers">ATC</button><!--
+               <img src="assets/Icons/discord-svgrepo-com.svg" class="icon">
+            </button>
+            <!-- Botão de Configurações -->
+            <button class="settings-button" id="settingsButton" type="button">
+               ⚙
+            </button>
+         </div>
+      </header>
+      <div class="Changelog-menu" id="ChangelogMenu">
+         <span class="title">Changelog
+            <button class="cl-close-button" onclick="toggleChangeLogMenu()">
+               <img src="assets/Icons/close-svgrepo-com.svg" class="close-icon">
+            </button>
+         </span>
+         <div class="content">
+            <h2>[DEV 0.2.3a] - 04/06/2025</h2> 
+            <h3>Added</h3>
+            <ul>
+               <li>Queue information now shows up in the Controllers menu!</li>
+            </ul>
+            <h3>Corrected</h3>
+            <ul>
+               <li>UI Bugs Fixs.</li>
+            </ul>
+            <h3>Comments</h3>
+            <ul>
+               <li>Thanks to ATC24 Staff for providing the data!</li>
+            </ul>
+         </div>
+      </div>     
+      <div class="settings-menu" id="settingsMenu">
+         <!-- Configurações existentes -->
+         <h2>
+            Settings
+            <button class="close-button" onclick="toggleSettingsMenu()">
+            <img src="assets/Icons/close-svgrepo-com.svg" class="close-icon">
+            </button>
+         </h2>
+         <hr class="menu-divider">
+         <h3>Map Settings</h3>
+         <div class="map-settings">
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showAirportUI" checked>
+               <label for="showAirportUI">Show Airport UI</label>
+            </div>
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showFIRlines" checked>
+               <label for="showFIRlines">Show FIR Lines</label>
+            </div>
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showAPPlines" checked>
+               <label for="showAPPlines">Show APP Lines</label>
+            </div>
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showOnlineATC" checked>
+               <label for="showOnlineATC">Show Online ATC</label>
+            </div>
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showNavaids" checked>
+               <label for="showNavaids">Show Navaids</label>
+            </div>
+            <div class="map-option">
+               <input type="checkbox" onchange="onCheckBoxChange(this)" id="showNavaidsLabels" checked>
+               <label for="showNavaidsLabels">Show Navaids Labels</label>
+            </div>
+         </div>
+      </div>
+      <div class="flp-menu" id="FlpMenu">
+         <h3>Flight Plan (Beta)</h3>
+         <hr class="menu-divider">
+         <div class="form-row">
+            <label for="departure">Departure:</label>
+            <textarea id="departure" class="small-input" placeholder="IRFD" maxlength="4"></textarea>
+            <label for="departureRwy">RWY:</label>
+            <textarea id="departureRwy" class="small-input" placeholder="07R" maxlength="3"></textarea>
+         </div>
+         <div class="form-row">
+            <label for="sid">SID:</label>
+            <textarea id="sid" class="small-input" placeholder="DARRK" maxlength="5"></textarea>
+            <label for="deptrans">Trans:</label>
+            <textarea id="deptrans" class="small-input" placeholder="SPACE" maxlength="3"></textarea>
+         </div>
+         <hr class="menu-divider">
+         <div class="form-row">
+            <label for="arrival">Arrival:</label>
+            <textarea id="arrival" class="small-input" placeholder="ILAR" maxlength="4"></textarea>
+            <label for="arrivalRwy">RWY:</label>
+            <textarea id="arrivalRwy" class="small-input" placeholder="06" maxlength="3"></textarea>
+         </div>
+         <div class="form-row">
+            <label for="star">STAR:</label>
+            <textarea id="star" class="small-input" placeholder="BEANS" maxlength="5"></textarea>
+            <label for="arrtrans">Trans:</label>
+            <textarea id="arrtrans" class="small-input" placeholder="SEEKS" maxlength="3"></textarea>   
+         </div>
+         <div class="form-row">
+            <label for="app">APP:</label>
+            <textarea id="app" class="small-input" placeholder="ILS 07C" maxlength="7"></textarea>
+            <span class="small-input"></span><label></label>
+         </div>
+         <hr class="menu-divider">
+         <div class="form-row">
+            <label for="waypoints">Waypoints:</label>
+            <textarea id="waypoints" class="large-input" placeholder="MOGTA TRN CAN"></textarea>
+         </div>
+         <div class="buttons">
+            <button class="save" onclick="saveFlp()">Save</button>
+            <button class="reset" onclick="resetFlp()">Reset</button>
+            <button class="generate" onclick="generateFPL()">Generate</button>
+         </div>
+      </div>
+      <div class="mini-slider" id="MiniSlider">
+         <label for="slider">Select Value:</label>
+         <input type="range" id="slider" name="slider" min="3" max="8" step="0.5" value="5.5" oninput="updateSliderValue(this.value)">
+         <span id="sliderValue">5</span>
+     </div>
+      <div class="message-menu" id="MessageMenu">
+         <div class="title">Error</div>
+         <div class="content">
+            <p>Message</p>
+         </div>
+         <div class="buttons">
+            <button class="close-button" id="message-button1">Close</button>
+            <button class="close-button" id="message-button2" style="display: none;">Secondary</button>
+         </div>
+      </div>
+      <div class="footer">
+         <a href="/" class="footer-link">24RADAR</a>
+         | 
+         <a onclick="toggleChangeLogMenu()" class="footer-link" id="version"></a>
+         | 
+         <span class="footer-link">© 24RADAR</span>
+      </div>     
+
+      <div id="map-container">
+         <canvas id="map"></canvas>
+         <div id="radarDetail" class="radar-detail" aria-hidden="true">
+            <div class="radar-detail-head"><span id="detailCallsign">—</span><button id="detailClose">×</button></div>
+            <div id="detailPilot" class="detail-pilot"></div>
+            <div id="detailEmergency" class="detail-emergency"></div>
+            <div class="detail-grid">
+              <div><small>GROUND SPEED</small><b id="detailGS">—</b></div>
+              <div><small>ALTITUDE</small><b id="detailAlt">—</b></div>
+              <div><small>HEADING</small><b id="detailHdg">—</b></div>
+              <div><small>AIRCRAFT</small><b id="detailType">—</b></div>
+            </div>
+            <div class="detail-route">
+              <div><span>DESTINATION</span><b id="detailDest">—</b></div>
+              <div class="progress"><i id="detailProgress"></i></div>
+              <div class="route-meta"><span id="detailDistance">—</span><span id="detailETA">—</span></div>
+            </div>
+         </div>
+         <div id="radarControls">
+            <button id="radarFit" type="button">FIT</button>
+            <button id="radarZoomIn" type="button">+</button>
+            <button id="radarZoomOut" type="button">−</button>
+         </div>
+      </div>
+
+      <div id="overlay"></div>
+      <div id="radarControllers" class="radar-controllers" aria-hidden="true">
+        <div class="controllers-head"><b>ATC POSITIONS</b><span id="controllerCount">0</span></div>
+        <div id="controllerList"></div>
+      </div>
+
+      <div id="loading">
+         <div class="loading-content">
+            <div class="loading-text">Loading</div>
+            <img src="assets/Icons/loading-spinner-svgrepo-com.svg" class="loading-icon">
+         </div>
+      </div>
+      
+      <script src="assets/areas.js"></script>
+
+   
+<style>
+/* 24RADAR compatibility layer — keeps the 24RADAR page layout while replacing
+   its data/map implementation with the 24RADAR /api/live backend. */
+:root{
+  --radar-blue:#3b6cec;--radar-bg:#080b10;--radar-panel:rgba(12,16,23,.96);
+  --radar-border:rgba(90,105,125,.28);--radar-text:#e8edf5;--radar-dim:#8e9bad;
+}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--radar-bg);color:var(--radar-text);font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+header{z-index:100}
+.RADAR-logo{display:flex;align-items:center;font-size:20px;font-weight:800;letter-spacing:.2px;color:#fff;white-space:nowrap}
+.header-text-icon{font-size:16px;margin-right:5px}
+.header-buttons{display:flex;align-items:center;gap:8px}
+.header-button2,.settings-button{cursor:pointer}
+#map-container{position:absolute;inset:0;z-index:0;background:#06090e}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block}
+#radarControls{position:absolute;right:14px;bottom:18px;display:flex;flex-direction:column;z-index:20;border:1px solid var(--radar-border);border-radius:9px;overflow:hidden;background:rgba(10,14,20,.9);box-shadow:0 8px 25px #0008}
+#radarControls button{width:46px;height:42px;border:0;border-bottom:1px solid var(--radar-border);background:transparent;color:#fff;font-size:20px;cursor:pointer}
+#radarControls button:last-child{border-bottom:0}
+#radarControls button:hover{background:#182334}
+.radar-detail{position:absolute;right:16px;top:70px;width:285px;display:none;background:var(--radar-panel);border:1px solid var(--radar-border);border-radius:10px;box-shadow:0 15px 40px #0009;overflow:hidden;z-index:30}
+.radar-detail.show{display:block}
+.radar-detail-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--radar-border);font-weight:800;color:#4f91ff}
+.radar-detail-head button{border:0;background:none;color:#9aa6b5;font-size:20px;cursor:pointer}
+.detail-pilot{padding:8px 14px;color:#aeb9c8;font-size:11px}
+.detail-emergency{background:#d83b3b;color:#fff;font-weight:800;text-align:center;font-size:10px;padding:5px;display:none}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--radar-border)}
+.detail-grid>div{background:#0c1118;padding:10px 12px;min-height:42px}
+.detail-grid small{display:block;color:#7e8999;font-size:8px;letter-spacing:.5px;margin-bottom:4px}
+.detail-grid b{font-size:13px}
+.detail-route{padding:12px 14px;border-top:1px solid var(--radar-border)}
+.detail-route>div:first-child{display:flex;justify-content:space-between;font-size:10px;color:#8d99aa}
+.detail-route b{color:#fff}
+.progress{height:5px;background:#1a2431;border-radius:5px;overflow:hidden;margin:10px 0 6px}
+.progress i{display:block;height:100%;width:0;background:var(--radar-blue)}
+.route-meta{display:flex;justify-content:space-between;color:#8d99aa;font-size:9px}
+.radar-controllers{position:absolute;left:0;top:58px;bottom:28px;width:285px;display:none;background:var(--radar-panel);border-right:1px solid var(--radar-border);z-index:25;box-shadow:10px 0 30px #0006}
+.radar-controllers.show{display:block}
+.controllers-head{padding:12px 14px;border-bottom:1px solid var(--radar-border);display:flex;justify-content:space-between;color:#fff;font-size:11px}
+.controllers-head span{color:#8e9bad}
+#controllerList{overflow:auto;height:calc(100% - 42px)}
+.controller-row{padding:10px 14px;border-bottom:1px solid rgba(90,105,125,.16);font-size:11px}
+.controller-row b{color:#4f91ff}
+.controller-row small{display:block;color:#8e9bad;margin-top:3px}
+.radar-airport-label{font-weight:700;font-size:10px}
+.radar-airport-sub{font-size:8px;opacity:.75}
+.radar-aircraft-label{font-size:10px;font-weight:700}
+.radar-aircraft-sub{font-size:8px;opacity:.8}
+#loading{z-index:200}
+.radar-error{position:absolute;left:50%;top:62px;transform:translateX(-50%);z-index:60;padding:7px 12px;border-radius:16px;background:#7c2626;color:#fff;font-size:10px;display:none}
+.radar-error.show{display:block}
+
+.radar-home{text-decoration:none;color:inherit}
+.settings-menu,.flp-menu,.Changelog-menu{display:none}
+.settings-menu.show,.flp-menu.show,.Changelog-menu.show{display:block}
+.header-button2{font-family:inherit;font-size:14px;color:inherit}
+</style>
+
+<script>
+(() => {
+  "use strict";
+
+  const API="/api/live", POLL_MS=5000;
+  const STUDS_PER_NMI=3307.14286;
+  const canvas=document.getElementById("map"), ctx=canvas.getContext("2d");
+  const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+
+  const state={
+    aircraft:new Map(), controllers:[], polling:false, timer:null,
+    origin:{x:0,y:0}, scale:.62, selected:null, settings:{
+      showAirportUI:true,showFIRlines:true,showAPPlines:true,
+      showOnlineATC:true,showNavaids:true,showNavaidsLabels:true
+    },
+    areas:[], airports:{}, lastUpdate:null, dragging:false, dragStart:null,
+    viewStart:{x:0,y:0}, calibrated:{}
+  };
+
+  // Keep 24RADAR's areas.js compatibility. If it is present, its official
+  // controlAreas data is consumed directly; if not, the radar still works.
+  if(Array.isArray(window.controlAreas)) state.areas=window.controlAreas;
+  else if(Array.isArray(window.areas)) state.areas=window.areas;
+
+  const $=id=>document.getElementById(id);
+  const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  function resize(){
+    const r=canvas.getBoundingClientRect();
+    canvas.width=Math.round(r.width*dpr); canvas.height=Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener("resize",resize);
+
+  function worldToScreen(x,y){
+    const r=canvas.getBoundingClientRect();
+    return {x:(x-state.viewStart.x)*state.scale+r.width/2,y:(y-state.viewStart.y)*state.scale+r.height/2};
+  }
+  function screenToWorld(x,y){
+    const r=canvas.getBoundingClientRect();
+    return {x:(x-r.width/2)/state.scale+state.viewStart.x,y:(y-r.height/2)/state.scale+state.viewStart.y};
+  }
+
+  // Parse airport records from 24RADAR areas.js. This preserves its data model
+  // without copying its map renderer.
+  function ingestAreas(){
+    if(!Array.isArray(state.areas)) return;
+    for(const a of state.areas){
+      const code=(a.icaoCode||a.icao||a.nameCode||"").toUpperCase();
+      const c=a.coordinates;
+      if(code && Array.isArray(c)&&c.length>=2) state.airports[code]={x:+c[0],y:+c[1],name:a.real_name||a.name||code};
+      if(Array.isArray(a.coordinates) && a.type && a.type!=="Airport" && Array.isArray(a.coordinates[0])){}
+    }
+  }
+  ingestAreas();
+
+  // Known official 24RADAR airport coordinate shape is consumed when available.
+  // Friendly-name fixes are deliberately limited to known 24RADAR/24RADAR data.
+  const names={
+    IDCS:"Saba",ITKO:"Tokyo",IPPH:"Perth",ILKL:"Lukla",IGRV:"Grindavik",
+    TVO:"Tavaro Seabase",IBTH:"Saint Barthelemy",ISCM:"Scampton",IZOL:"Izolirani",
+    IBLT:"Boltic",IMLR:"Mellor",IGAR:"Garry",IRFD:"Greater Rockford",
+    ISKP:"Skopelos",ISAU:"Sauthemptona",ITRN:"Training Centre",
+    ILAR:"Larnaca",IPAP:"Paphos",IHEN:"Henstridge",IBAR:"Barra",IIAB:"McConnell",OWO:"Waterloo"
+  };
+  for(const [k,v] of Object.entries(names)) if(!state.airports[k]) state.airports[k]={x:NaN,y:NaN,name:v};
+
+  try{state.calibrated=JSON.parse(localStorage.getItem("24radar_airportCoords")||"{}")}catch{}
+
+  function applyCalibration(){
+    for(const [k,v] of Object.entries(state.calibrated)){
+      if(v&&Number.isFinite(+v.x)&&Number.isFinite(+v.y)) state.airports[k]={x:+v.x,y:+v.y,name:names[k]||state.airports[k]?.name||k};
+    }
+  }
+  applyCalibration();
+
+  function classify(t){
+    t=(t||"").toLowerCase();
+    if(t.includes("helicopter")||t.includes("heli")) return ["heli",1];
+    if(["747","777","787","a380","a350","a340","a330","767"].some(k=>t.includes(k))) return ["wide",1.25];
+    if(["c17","c-17","c130","c-130","a400","b1","b-1"].some(k=>t.includes(k))) return ["cargo",1.12];
+    return ["jet",1];
+  }
+
+  function destination(d){
+    return String(d.destination??d.arrivalAirport??d.arrival??d.arrivalICAO??
+      d.flightPlan?.destination??d.flightPlan?.arrival??d.flightPlan?.arrivalAirport??
+      d.flightPlan?.arrivalICAO??d.flightPlan?.to??"").toUpperCase();
+  }
+
+  function origin(d){
+    return String(d.origin??d.departureAirport??d.departure??d.departureICAO??
+      d.flightPlan?.origin??d.flightPlan?.departure??d.flightPlan?.departureAirport??
+      d.flightPlan?.departureICAO??d.flightPlan?.from??"").toUpperCase();
+  }
+
+  function ingest(data){
+    const seen=new Set();
+    for(const [callsign,d] of Object.entries(data.aircraft||{})){
+      seen.add(callsign);
+      state.aircraft.set(callsign,{
+        callsign,x:+(d.position?.x??0),y:+(d.position?.y??0),
+        heading:+(d.heading??0),altitude:+(d.altitude??0),
+        speed:+(d.speed??0),groundSpeed:+(d.groundSpeed??d.speed??0),
+        isOnGround:!!d.isOnGround,aircraftType:d.aircraftType||"",
+        playerName:d.playerName||"",isEmergencyOccuring:!!d.isEmergencyOccuring,
+        destination:destination(d),origin:origin(d),
+        eta:d.eta??d.estimatedArrival??d.flightPlan?.eta??"",
+        verticalSpeed:+(d.verticalSpeed??d.vs??d.verticalRate??0)
+      });
+    }
+    for(const k of state.aircraft.keys()) if(!seen.has(k)) state.aircraft.delete(k);
+
+    const ctl=data.controllers||data.atc||data.positions||[];
+    state.controllers=Array.isArray(ctl)?ctl:Object.entries(ctl).map(([name,v])=>({name,...v}));
+    state.lastUpdate=new Date();
+    $("onlineNumber").textContent=state.controllers.length;
+    $("mapLastUpdate").textContent=state.lastUpdate.toLocaleTimeString();
+    $("version").textContent="24RADAR LIVE";
+  }
+
+  async function poll(){
+    try{
+      const r=await fetch(API,{cache:"no-store"});
+      if(!r.ok) throw Error("HTTP "+r.status);
+      ingest(await r.json());
+      $("loading").style.display="none";
+      if(state.aircraft.size && !state.polling) fitTraffic();
+      $("mapUpdateTime").classList.remove("error");
+      state.polling=true;
+      $("onlineNumber").textContent=state.controllers.length;
+    }catch(e){
+      $("loading").style.display="none";
+      state.polling=false;
+      showError("Live data unavailable");
+    }
+    draw(); renderControllers();
+    if(state.polling) state.timer=setTimeout(poll,POLL_MS);
+  }
+  function start(){ if(state.timer) clearTimeout(state.timer); state.polling=true; poll(); }
+  function stop(){state.polling=false;if(state.timer)clearTimeout(state.timer);state.timer=null;draw();}
+
+  function showError(t){
+    let el=$("radarError"); if(!el){el=document.createElement("div");el.id="radarError";el.className="radar-error";document.body.appendChild(el)}
+    el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),3000);
+  }
+
+  function fitTraffic(){
+    const a=[...state.aircraft.values()].filter(v=>Number.isFinite(v.x)&&Number.isFinite(v.y));
+    if(!a.length) return;
+    let minX=Math.min(...a.map(v=>v.x)),maxX=Math.max(...a.map(v=>v.x));
+    let minY=Math.min(...a.map(v=>v.y)),maxY=Math.max(...a.map(v=>v.y));
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    const span=Math.max(maxX-minX,maxY-minY,1000);
+    state.scale=Math.max(.04,Math.min(2,Math.min(w,h)/(span*1.35)));
+    state.viewStart={x:(minX+maxX)/2,y:(minY+maxY)/2};
+    draw();
+  }
+
+  function fitMapData(){
+    const a=[...state.aircraft.values()];
+    if(a.length){fitTraffic();return}
+    const pts=Object.values(state.airports).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+    if(!pts.length)return;
+    const minX=Math.min(...pts.map(p=>p.x)),maxX=Math.max(...pts.map(p=>p.x));
+    const minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
+    const span=Math.max(maxX-minX,maxY-minY,100);
+    state.scale=Math.min(canvas.clientWidth,canvas.clientHeight)/(span*1.2);
+    state.viewStart={x:(minX+maxX)/2,y:(minY+maxY)/2};
+    draw();
+  }
+
+  function drawGrid(w,h){
+    ctx.fillStyle="#05080d";ctx.fillRect(0,0,w,h);
+    const step=80;
+    ctx.strokeStyle="rgba(52,65,82,.24)";ctx.lineWidth=1;
+    for(let x=0;x<w;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+    for(let y=0;y<h;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  }
+
+  function drawAreas(){
+    if(!state.settings.showFIRlines && !state.settings.showAPPlines)return;
+    for(const a of state.areas){
+      if(!Array.isArray(a.coordinates)||a.coordinates.length<3)continue;
+      const type=String(a.type||"").toLowerCase();
+      const isApp=/tma|app/.test(type), isFir=/fir|ctr|control/.test(type);
+      if(isApp&&!state.settings.showAPPlines)continue;
+      if(isFir&&!isApp&&!state.settings.showFIRlines)continue;
+      const pts=a.coordinates;
+      if(!Array.isArray(pts[0])||pts[0].length<2)continue;
+      ctx.beginPath();
+      pts.forEach((p,i)=>{const q=worldToScreen(+p[0],+p[1]);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});
+      ctx.closePath();
+      ctx.strokeStyle=isApp?"rgba(75,123,235,.52)":"rgba(173,111,38,.55)";
+      ctx.lineWidth=1;ctx.stroke();
+      if(a.name){
+        const p=worldToScreen(+pts[0][0],+pts[0][1]);
+        ctx.fillStyle="rgba(140,151,168,.55)";ctx.font="9px system-ui";ctx.fillText(a.name,p.x+4,p.y-4);
+      }
+    }
+  }
+
+  function drawAirports(){
+    if(!state.settings.showAirportUI)return;
+    for(const [icao,a] of Object.entries(state.airports)){
+      if(!Number.isFinite(a.x)||!Number.isFinite(a.y))continue;
+      const q=worldToScreen(a.x,a.y);
+      if(q.x<-100||q.x>canvas.clientWidth+100||q.y<-50||q.y>canvas.clientHeight+50)continue;
+      ctx.strokeStyle="#697586";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(q.x-7,q.y);ctx.lineTo(q.x+7,q.y);ctx.stroke();
+      ctx.fillStyle="#0a0e14";ctx.strokeStyle="#3b6cec";ctx.beginPath();ctx.arc(q.x,q.y,3,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle="#4d91ff";ctx.font="700 10px system-ui";ctx.fillText(icao,q.x+9,q.y-4);
+      ctx.fillStyle="#78879a";ctx.font="8px system-ui";ctx.fillText(a.name||names[icao]||"",q.x+9,q.y+6);
+    }
+  }
+
+  function drawControllers(){
+    if(!state.settings.showOnlineATC)return;
+    for(const c of state.controllers){
+      const p=c.position||c.pos||c;
+      const x=+(p.x??c.x),y=+(p.y??c.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y))continue;
+      const q=worldToScreen(x,y);
+      ctx.fillStyle="#f0b24c";ctx.strokeStyle="#f0b24c";ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(q.x,q.y,4,0,Math.PI*2);ctx.fill();
+      const n=c.callsign||c.name||c.playerName||c.username||"ATC";
+      ctx.fillStyle="#f0b24c";ctx.font="700 9px system-ui";ctx.fillText(n,q.x+7,q.y-5);
+    }
+  }
+
+  function drawAircraft(){
+    const placed=[];
+    for(const a of state.aircraft.values()){
+      const q=worldToScreen(a.x,a.y); if(q.x<-80||q.x>canvas.clientWidth+80||q.y<-40||q.y>canvas.clientHeight+40)continue;
+      const [kind,mul]=classify(a.aircraftType), active=a.callsign===state.selected;
+      ctx.save();ctx.translate(q.x,q.y);ctx.rotate((a.heading||0)*Math.PI/180);
+      ctx.fillStyle=active?"#fff":"#3b8cff";ctx.strokeStyle=active?"#fff":"#3b8cff";ctx.lineWidth=1;
+      const z=6*mul;
+      ctx.beginPath();
+      if(kind==="heli"){ctx.arc(0,0,z*.65,0,Math.PI*2);ctx.moveTo(-z*1.4,0);ctx.lineTo(z*1.4,0)}
+      else {ctx.moveTo(z*1.6,0);ctx.lineTo(-z*.8,-z*.7);ctx.lineTo(-z*.45,0);ctx.lineTo(-z*.8,z*.7);ctx.closePath()}
+      ctx.fill();ctx.stroke();ctx.restore();
+
+      const labelX=q.x+11,labelY=q.y-7;
+      const text=a.callsign, sub=`FL${String(Math.max(0,Math.round(a.altitude))).padStart(3,"0")} · ${a.aircraftType||"Aircraft"}`;
+      let overlap=false;
+      for(const b of placed) if(labelX<b.x+b.w&&labelX+Math.max(80,text.length*6.3)<b.x&&labelY<b.y+b.h&&labelY+22>b.y) overlap=true;
+      if(!overlap){
+        ctx.fillStyle=active?"#fff":"#4d91ff";ctx.font="700 10px system-ui";ctx.fillText(text,labelX,labelY);
+        ctx.fillStyle="#8592a3";ctx.font="8px system-ui";ctx.fillText(sub,labelX,labelY+11);
+        placed.push({x:labelX,y:labelY-10,w:Math.max(90,text.length*6.3),h:24});
+      }
+    }
+  }
+
+  function drawRoute(){
+    const a=state.aircraft.get(state.selected); if(!a)return;
+    const dest=state.airports[a.destination];
+    if(!dest||!Number.isFinite(dest.x)||!Number.isFinite(dest.y))return;
+    const p=worldToScreen(a.x,a.y),q=worldToScreen(dest.x,dest.y);
+    ctx.setLineDash([6,5]);ctx.strokeStyle="#3b6cec";ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(q.x,q.y,6,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle="#3b6cec";ctx.font="700 9px system-ui";ctx.fillText("LAND "+a.destination,q.x+9,q.y-6);
+  }
+
+  function draw(){
+    if(!ctx)return;
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    drawGrid(w,h);drawAreas();drawAirports();drawControllers();drawRoute();drawAircraft();
+    $("onlineNumber").textContent=state.controllers.length;
+  }
+
+  function selectAt(clientX,clientY){
+    const r=canvas.getBoundingClientRect(),sx=clientX-r.left,sy=clientY-r.top;
+    let best=null,dist=Infinity;
+    for(const a of state.aircraft.values()){
+      const q=worldToScreen(a.x,a.y),d=Math.hypot(q.x-sx,q.y-sy);
+      if(d<20&&d<dist){best=a;dist=d}
+    }
+    if(best){state.selected=best.callsign;showDetail(best);draw()}
+  }
+
+  function showDetail(a){
+    $("radarDetail").classList.add("show");$("radarDetail").setAttribute("aria-hidden","false");
+    $("detailCallsign").textContent=a.callsign;
+    $("detailPilot").textContent=a.playerName||"";
+    $("detailGS").textContent=Math.round(a.groundSpeed||a.speed||0)+" kts";
+    $("detailAlt").textContent="FL"+String(Math.max(0,Math.round(a.altitude))).padStart(3,"0");
+    $("detailHdg").textContent=String(Math.round((a.heading||0)+360)%360).padStart(3,"0")+"°";
+    $("detailType").textContent=a.aircraftType||"—";
+    $("detailDest").textContent=a.destination||"—";
+    $("detailEmergency").textContent=a.isEmergencyOccuring?"EMERGENCY":"";
+    $("detailEmergency").style.display=a.isEmergencyOccuring?"block":"none";
+    let pct=0,distText="—";
+    if(a.destination&&state.airports[a.destination]){
+      const d=state.airports[a.destination],n=Math.hypot(a.x-d.x,a.y-d.y)/STUDS_PER_NMI;
+      distText=n<1?Math.round(n*6076)+" ft":n.toFixed(1)+" NM";
+      const o=a.origin&&state.airports[a.origin];
+      if(o){const total=Math.hypot(o.x-d.x,o.y-d.y),rem=Math.hypot(a.x-d.x,a.y-d.y);pct=Math.max(0,Math.min(100,(1-rem/Math.max(total,1))*100))}
+    }
+    $("detailDistance").textContent=distText;
+    $("detailETA").textContent=a.eta?String(a.eta):"ETA —";
+    $("detailProgress").style.width=pct+"%";
+  }
+
+  function renderControllers(){
+    const list=$("controllerList"); if(!list)return;
+    list.innerHTML="";
+    for(const c of state.controllers){
+      const row=document.createElement("div");row.className="controller-row";
+      const n=c.callsign||c.name||c.playerName||c.username||"ATC";
+      const t=c.type||c.positionType||c.facility||"Controller";
+      row.innerHTML=`<b>${esc(n)}</b><small>${esc(t)}</small>`;
+      list.appendChild(row);
+    }
+    $("controllerCount").textContent=state.controllers.length;
+  }
+
+  // Official 24RADAR controls retained by name/behavior, backed by 24RADAR.
+  window.toggleFlpMenu=()=>{$("FlpMenu").classList.toggle("show")};
+  window.toggleSettingsMenu=()=>{$("settingsMenu").classList.toggle("show")};
+  window.toggleChangeLogMenu=()=>{$("ChangelogMenu").classList.toggle("show")};
+  window.onCheckBoxChange=(el)=>{state.settings[el.id]=el.checked;draw()};
+  window.updateSliderValue=v=>{$("sliderValue").textContent=v};
+  window.saveFlp=()=>{
+    const ids=["departure","departureRwy","sid","deptrans","arrival","arrivalRwy","star","arrtrans","app","waypoints"];
+    const o={};ids.forEach(id=>o[id]=$(id).value);localStorage.setItem("24radar_flightPlan",JSON.stringify(o));
+  };
+  window.resetFlp=()=>{["departure","departureRwy","sid","deptrans","arrival","arrivalRwy","star","arrtrans","app","waypoints"].forEach(id=>$(id).value="")};
+  window.generateFPL=()=>{saveFlp();showError("Flight plan saved locally")};
+
+  $("btn")?.addEventListener("click",()=>{});
+  $("settingsButton")?.addEventListener("click",toggleSettingsMenu);
+  $("controllersButton")?.addEventListener("click",()=>$("radarControllers").classList.toggle("show"));
+  $("statsButton")?.addEventListener("click",()=>fitMapData());
+  $("fitButton2")?.addEventListener("click",fitTraffic);
+  $("radarRefreshButton")?.addEventListener("click",poll);
+  $("radarFit")?.addEventListener("click",fitTraffic);
+  $("radarZoomIn")?.addEventListener("click",()=>{state.scale*=1.35;draw()});
+  $("radarZoomOut")?.addEventListener("click",()=>{state.scale/=1.35;draw()});
+  $("detailClose")?.addEventListener("click",()=>{$("radarDetail").classList.remove("show");state.selected=null;draw()});
+
+  canvas.addEventListener("click",e=>selectAt(e.clientX,e.clientY));
+  canvas.addEventListener("wheel",e=>{e.preventDefault();state.scale*=e.deltaY<0?1.15:.87;draw()},{passive:false});
+
+  let down=null;
+  canvas.addEventListener("pointerdown",e=>{down={x:e.clientX,y:e.clientY,v:{...state.viewStart}};canvas.setPointerCapture(e.pointerId)});
+  canvas.addEventListener("pointermove",e=>{
+    if(!down)return;
+    const dx=(e.clientX-down.x)/state.scale,dy=(e.clientY-down.y)/state.scale;
+    state.viewStart={x:down.v.x-dx,y:down.v.y-dy};draw();
+  });
+  canvas.addEventListener("pointerup",()=>down=null);
+
+  // Compatibility: old calibration button name is accepted if present.
+  const calib=document.getElementById("calibrateAirport");
+  if(calib)calib.addEventListener("click",()=>showError("Airport calibration uses the 24RADAR map calibration flow."));
+
+  // 24RADAR's loading screen remains; data is started after its areas.js loads.
+  window.addEventListener("load",()=>{
+    setTimeout(()=>{ ingestAreas(); applyCalibration(); resize(); fitMapData(); start(); },120);
+  });
+  resize();
+})();
+</script>
+</body>
+</html>

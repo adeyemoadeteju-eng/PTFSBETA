@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>24RADAR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#05070a; --panel:#0d1117; --panel2:#131a22; --border:#232c36;
+    --text:#e6edf3; --dim:#7d8a99;
+    --blue:#3d8bfd; --red:#e5484d; --green:#2ea043; --orange:#d29922;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; height:100%; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; color:var(--text); background:var(--bg); }
+  #app { position:relative; height:100vh; width:100vw; }
+
+  #topbar {
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; gap:10px; padding:8px 12px;
+    background:rgba(10,13,18,0.92); border-bottom:1px solid var(--border);
+  }
+  #topbar .brand { font-weight:700; font-size:15px; letter-spacing:.5px; }
+  .chip { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:5px 9px; }
+  .chip b { color:var(--text); font-weight:600; }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--dim); }
+  .dot.on { background:var(--green); }
+  .dot.mock { background:var(--orange); }
+  .dot.err { background:var(--red); }
+  #topbar .spacer { flex:1; }
+  .btn { font-family:'Inter',sans-serif; font-size:11px; font-weight:600; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 11px; border-radius:5px; cursor:pointer; }
+  .btn:hover { border-color:var(--blue); }
+  .btn.active { background:var(--blue); border-color:var(--blue); color:#04101f; }
+
+  #mapWrap { position:absolute; inset:0; overflow:hidden; cursor:grab; background:#04070c; }
+  #mapWrap.grabbing { cursor:grabbing; }
+  svg#scene { width:100%; height:100%; display:block; }
+  .gridline { stroke:#0c121a; stroke-width:1; }
+  .sectorLabel { font-size:10px; font-weight:600; letter-spacing:.5px; fill:#5b9bd8; opacity:0.75; }
+
+  .apBadge { background:rgba(10,13,18,0.92); border:1px solid var(--border); border-radius:6px; padding:6px 8px; width:180px; user-select:none; }
+  .apBadge .icaoRow { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; gap:6px; }
+  .apBadge .icao { font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .apBadge .q { font-size:10px; color:var(--dim); }
+  .apBadge .posRow { display:flex; gap:3px; }
+  .posChip { flex:1; text-align:center; font-size:10px; font-weight:700; border-radius:3px; padding:3px 0; color:#04101f; opacity:0.28; }
+  .posChip.on { opacity:1; }
+  .posChip.TWR { background:var(--red); }
+  .posChip.GND { background:var(--green); }
+  .posChip.CTR { background:var(--blue); }
+
+  .acLabel { font-size:10px; font-weight:600; fill:var(--blue); }
+  .acLabel.emg { fill:var(--red); font-weight:700; }
+  .acSub { font-size:9px; fill:var(--dim); }
+
+  #zoomctl { position:absolute; right:12px; bottom:12px; z-index:20; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  #zoomctl button { width:32px; height:32px; background:transparent; border:none; color:var(--text); font-size:16px; cursor:pointer; border-bottom:1px solid var(--border); }
+  #zoomctl button:last-child { border-bottom:none; }
+  #zoomctl button:hover { background:var(--panel2); }
+
+  #drawer {
+    position:absolute; top:44px; bottom:0; left:0; width:250px; z-index:25; background:var(--panel);
+    border-right:1px solid var(--border); display:none; flex-direction:column;
+    transform:translateX(-100%); transition:transform .2s ease;
+  }
+  #drawer.open { display:flex; transform:translateX(0); }
+  .phead { padding:10px 14px; border-bottom:1px solid var(--border); font-weight:700; font-size:12px; display:flex; justify-content:space-between; }
+  .phead .n { color:var(--dim); font-weight:500; }
+  #drawerList { flex:1; overflow-y:auto; }
+  .ctlRow { padding:8px 14px; border-bottom:1px solid rgba(35,44,54,0.6); font-size:11px; }
+  .ctlRow .p { font-weight:600; color:var(--blue); }
+  .ctlRow .t { color:var(--dim); font-size:10px; }
+  .drawerSection { padding:6px 14px 3px; font-size:9px; letter-spacing:.5px; color:var(--dim); text-transform:uppercase; }
+  .empty { padding:24px 16px; color:var(--dim); font-size:11px; text-align:center; }
+
+  #calibHint {
+    position:absolute; left:50%; top:52px; transform:translateX(-50%); z-index:30;
+    background:var(--blue); color:#04101f; font-size:11px; font-weight:600;
+    padding:7px 14px; border-radius:20px; display:none;
+  }
+  #calibHint.show { display:block; }
+
+  #footerNote {
+    position:absolute; bottom:0; left:0; right:0; z-index:15; text-align:center;
+    font-size:10px; color:var(--dim); padding:5px; background:rgba(10,13,18,0.6);
+  }
+
+  #detailPanel {
+    position:absolute; top:52px; right:12px; z-index:25; width:230px;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    display:none; overflow:hidden;
+  }
+  #detailPanel.open { display:block; }
+  #detailPanel .dhead {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px; border-bottom:1px solid var(--border);
+  }
+  #detailPanel .dhead .cs { font-weight:700; font-size:14px; color:var(--blue); }
+  #detailPanel .dhead .cs.emg { color:var(--red); }
+  #detailPanel .dhead .close { cursor:pointer; color:var(--dim); font-size:14px; line-height:1; padding:2px 4px; }
+  #detailPanel .dhead .close:hover { color:var(--text); }
+  #detailPanel .pilot { padding:6px 12px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--border); }
+  #detailPanel .statGrid { display:grid; grid-template-columns:1fr 1fr; }
+  #detailPanel .stat { padding:9px 12px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+  #detailPanel .stat:nth-child(2n) { border-right:none; }
+  #detailPanel .stat .label { font-size:9px; letter-spacing:.4px; color:var(--dim); text-transform:uppercase; margin-bottom:3px; }
+  #detailPanel .stat .value { font-size:14px; font-weight:600; }
+  #detailPanel .emgBanner { background:var(--red); color:#1a0505; font-size:11px; font-weight:700; text-align:center; padding:6px; }
+
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-thumb { background:var(--border); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand">24RADAR</div>
+    <div class="chip"><div class="dot mock" id="statusDot"></div><span id="statusText">Not polling</span></div>
+    <div class="chip">ATC <b id="ctlCount">0</b></div>
+    <div class="chip">Traffic <b id="acCount">0</b></div>
+    <div class="chip" id="clockChip">--:--:--Z</div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnFit">Fit to Traffic</button>
+    <button class="btn" id="btnCalib">Calibrate Airport</button>
+    <button class="btn" id="btnDrawer">Controllers</button>
+    <button class="btn active" id="btnToggle">Start</button>
+  </div>
+
+  <div id="calibHint">Click the map where this airport actually is</div>
+
+  <div id="mapWrap">
+    <svg id="scene"></svg>
+  </div>
+
+  <div id="zoomctl"><button id="zoomIn">+</button><button id="zoomOut">−</button></div>
+
+  <div id="drawer">
+    <div class="phead"><span>ATC POSITIONS</span><span class="n" id="drawerCount">0</span></div>
+    <div id="drawerList"></div>
+  </div>
+
+  <div id="detailPanel">
+    <div class="dhead"><span class="cs" id="dpCallsign">—</span><span class="close" id="dpClose">✕</span></div>
+    <div class="pilot" id="dpPilot"></div>
+    <div id="dpEmergency"></div>
+    <div class="statGrid">
+      <div class="stat"><div class="label">Ground Speed</div><div class="value" id="dpGS">—</div></div>
+      <div class="stat"><div class="label">Altitude</div><div class="value" id="dpAlt">—</div></div>
+      <div class="stat"><div class="label">Heading</div><div class="value" id="dpHdg">—</div></div>
+      <div class="stat"><div class="label">Aircraft</div><div class="value" id="dpType">—</div></div>
+    </div>
+  </div>
+
+  <div id="footerNote">Live aircraft &amp; ATC positions via 24data REST polling · flight plan logs need the WebSocket feed (not included in this free version)</div>
+
+</div>
+
+<script>
+/* =========================================================================
+   24RADAR — polling version
+   -------------------------------------------------------------------------
+   No persistent connection anywhere. The frontend polls /api/live (a
+   Vercel serverless function — see api/live.js) every few seconds. That
+   function itself just fetches 24data's REST endpoints server-side and
+   returns the JSON — it does not stay running between requests, which is
+   why this whole setup is free with no idle server, no sleep timer, no
+   card required.
+
+   Same real 24data schema as before for AircraftData and Position[] —
+   see api/live.js's docstring for the endpoints used. FlightPlan data
+   is WebSocket-only per 24data's docs, so it's not available here.
+   ========================================================================= */
+
+const STUDS_PER_NMI = 3307.14286;
+const POLL_MS = 5000; // well within 24data's rate limits for a single viewer
+
+// Rough aircraft classification from the 24data `aircraftType` string, used
+// to pick a distinct icon silhouette and a size multiplier. Heuristic on
+// the type name, not authoritative data.
+function classifyAircraft(type){
+  const t = (type || "").toLowerCase();
+  if (t.includes("helicopter") || t.includes("heli")) return { shape:"heli", scale:1 };
+  if (["c17","c-17","globemaster","b1","b-1","lancer","c130","c-130","hercules","a400"].some(k=>t.includes(k)))
+    return { shape:"cargo", scale:1.3 };
+  if (["learjet","gulfstream","citation","challenger","phenom","falcon"].some(k=>t.includes(k)))
+    return { shape:"bizjet", scale:0.85 };
+  if (["atr","dhc","twin otter","caravan","cessna","piper","pa28","pa-28","kingair","king air","cirrus"].some(k=>t.includes(k)))
+    return { shape:"turboprop", scale:0.9 };
+  if (["747","777","787","a380","a350","a340","a330","767"].some(k => t.includes(k)))
+    return { shape:"widebody", scale:1.35 };
+  return { shape:"narrowbody", scale:1 };
+}
+
+// One hand-authored top-down silhouette per category. Not traced from any
+// real airline's or tracker site's iconography.
+const AIRCRAFT_SHAPES = {
+  narrowbody: "M 0,-11 L 1.5,-7 L 1.5,-1 L 8,4 L 8,6 L 1.5,4 L 1.5,6.5 L 3,8.5 L 3,9.5 L 0,8.5 L -3,9.5 L -3,8.5 L -1.5,6.5 L -1.5,4 L -8,6 L -8,4 L -1.5,-1 L -1.5,-7 Z",
+  widebody:   "M 0,-13 L 2,-8 L 2,-1 L 11,5 L 11,7.5 L 2,5 L 2,7.5 L 4,10 L 4,11 L 0,9.5 L -4,11 L -4,10 L -2,7.5 L -2,5 L -11,7.5 L -11,5 L -2,-1 L -2,-8 Z",
+  turboprop:  "M 0,-9 L 1.3,-6 L 1.3,0 L 9,1.5 L 9,3 L 1.3,2 L 1.3,7 L 2.5,8.5 L 2.5,9.3 L 0,8.3 L -2.5,9.3 L -2.5,8.5 L -1.3,7 L -1.3,2 L -9,3 L -9,1.5 L -1.3,0 L -1.3,-6 Z",
+  cargo:      "M 0,-12 L 2.2,-8 L 2.2,-2 L 12,3 L 12,5.5 L 2.2,3 L 2.2,6 L 5,10 L 5,11.5 L 2,10.5 L 0,12 L -2,10.5 L -5,11.5 L -5,10 L -2.2,6 L -2.2,3 L -12,5.5 L -12,3 L -2.2,-2 L -2.2,-8 Z",
+  bizjet:     "M 0,-9 L 1,-6 L 1,3 L 6,7 L 6,8.3 L 1,6.5 L 1,8 L 2,9 L 2,9.6 L 0,8.8 L -2,9.6 L -2,9 L -1,8 L -1,6.5 L -6,8.3 L -6,7 L -1,3 L -1,-6 Z",
+};
+
+// Airport ICAO -> friendly name. Source of truth is now the official
+// "ENROUTE CHART - PTFS" (the user provided a screenshot of it directly),
+// cross-checked against 24data's own docs samples where possible. This
+// replaces the earlier community-chart-derived list, which had at least
+// one confirmed error: it had "ICAR" for Larnaca — the official chart
+// clearly labels it ILAR (right next to the "LARNACA 122.670" VOR/DME box).
+// Codes visible on the chart that I couldn't confidently read a full name
+// for (a few small "…CG"-suffixed markers near some islands) are left
+// unnamed rather than guessed.
+const ICAO_NAMES = {
+  IDCS: "Saba", ITKO: "Tokyo", IPPH: "Perth", SHV: "Sea Haven",
+  ILKL: "Lukla", IGRV: "Grindavik", TVO: "Tavaro", IBTH: "Saint Barthelemy",
+  ISCM: "RAF Scampton", IJAF: "Al Najaf", IZOL: "Izolirani", IBLT: "Boltic",
+  IMLR: "Mellor", IGAR: "Airbase Garry", IRFD: "Greater Rockford",
+  ISKP: "Skopelos", ISAU: "Sauthemptona", ITRC: "Training Centre",
+  ILAR: "Larnaca", IPAP: "Paphos", IHEN: "Henstridge", IBAR: "Barra",
+  IIAB: "McConnell",
+};
+function friendlyName(icao){ return ICAO_NAMES[icao] ? `${icao} — ${ICAO_NAMES[icao]}` : icao; }
+
+// Pixel positions read directly off the official "ENROUTE CHART - PTFS"
+// image the user provided, used only as RELATIVE layout data in the
+// chart's own pixel space (chosen to roughly match that image's ~1272x953
+// canvas). Eyeballed from the chart, not exact — but once you calibrate
+// 2+ real airports against live traffic, we fit a scale+rotation+
+// translation transform from this pixel space into real stud space and
+// auto-place everything else (including the island shapes below) at
+// roughly the right spot, without clicking each one by hand.
+const CHART_POSITIONS = {
+  IDCS:{x:625,y:60},  ITKO:{x:588,y:183}, IPPH:{x:822,y:205}, SHV:{x:917,y:222},
+  ILKL:{x:897,y:290}, IPCG:{x:845,y:318}, IBTH:{x:683,y:405},
+  ISCM:{x:1032,y:410},IJAF:{x:1078,y:449},IZOL:{x:1057,y:492},ISKP:{x:910,y:570},
+  IGRV:{x:118,y:305}, TVO:{x:145,y:322},
+  IMLR:{x:468,y:617}, IGAR:{x:496,y:682}, IRFD:{x:637,y:635}, IBLT:{x:640,y:435},
+  ITRC:{x:590,y:745}, ISAU:{x:135,y:725},
+  ILAR:{x:797,y:735}, IPAP:{x:1128,y:775}, IBAR:{x:888,y:819}, IHEN:{x:790,y:840},
+};
+
+// Island landmasses traced (roughly — this is a hand-eyeballed approximation
+// from the chart image, not exact vector coastline data) from the white
+// landmass shapes on the official enroute chart. One landmass can host
+// several airports (e.g. the big Rockford landmass carries IMLR/IGAR/IRFD/
+// IBLT/ITRC), which is why islands are modeled as their own shapes instead
+// of one blob per airport like the old procedural version. Points are in
+// the same chart pixel space as CHART_POSITIONS above.
+const ISLAND_SHAPES = [
+  { id:"orenji", icaos:["IDCS","ITKO"], pts:[
+    [600,25],[635,35],[645,60],[625,75],[650,95],[640,120],[615,130],[625,155],
+    [600,175],[575,190],[555,175],[560,150],[540,140],[555,115],[545,95],
+    [565,80],[570,55],[585,40],
+  ]},
+  { id:"perth", icaos:["IPPH","SHV","ILKL","IPCG"], pts:[
+    [770,165],[810,155],[850,165],[880,180],[905,200],[895,225],[915,245],
+    [905,270],[875,290],[850,305],[820,295],[800,275],[810,250],[790,230],
+    [800,205],[775,190],
+  ]},
+  { id:"stbarth", icaos:["IBTH"], pts:[
+    [655,375],[685,368],[710,385],[715,410],[695,430],[665,425],[650,400],
+  ]},
+  { id:"izolirani", icaos:["ISCM","IJAF","IZOL"], pts:[
+    [985,375],[1030,365],[1075,380],[1100,410],[1090,440],[1105,465],
+    [1085,495],[1055,505],[1025,490],[1000,465],[1010,435],[985,415],
+  ]},
+  { id:"skopelos", icaos:["ISKP"], pts:[
+    [880,545],[910,538],[935,555],[930,580],[905,590],[880,575],
+  ]},
+  { id:"grindavik", icaos:["IGRV","TVO"], pts:[
+    [95,280],[130,270],[155,285],[150,315],[165,335],[145,355],[115,350],
+    [95,325],[105,300],
+  ]},
+  { id:"rockford", icaos:["IMLR","IGAR","IRFD","IBLT","ITRC"], pts:[
+    [420,560],[470,545],[520,555],[560,540],[610,550],[650,565],[665,595],
+    [645,620],[660,650],[635,680],[600,690],[580,720],[550,730],[520,710],
+    [490,715],[460,695],[430,670],[440,640],[410,615],[400,585],
+  ]},
+  { id:"sauthemptona", icaos:["ISAU"], pts:[
+    [105,700],[140,690],[165,710],[160,740],[135,755],[105,740],[95,715],
+  ]},
+  { id:"cyprus", icaos:["ILAR","IPAP","IBAR","IHEN"], pts:[
+    [760,760],[800,745],[850,750],[900,765],[950,780],[1000,775],[1030,790],
+    [1020,815],[980,825],[940,840],[890,845],[850,835],[810,820],[770,810],
+    [750,785],
+  ]},
+];
+
+// 2D similarity transform (uniform scale + rotation + translation) fit from
+// N>=2 point pairs, least-squares for N>2. Standard Umeyama/orthogonal-
+// Procrustes solution, no reflection.
+function fitSimilarityTransform(pairs){
+  const n = pairs.length;
+  let pBar={x:0,y:0}, qBar={x:0,y:0};
+  for (const {p,q} of pairs){ pBar.x+=p.x; pBar.y+=p.y; qBar.x+=q.x; qBar.y+=q.y; }
+  pBar.x/=n; pBar.y/=n; qBar.x/=n; qBar.y/=n;
+  let Sxx=0,Sxy=0,Syx=0,Syy=0, pNormSq=0;
+  for (const {p,q} of pairs){
+    const px=p.x-pBar.x, py=p.y-pBar.y, qx=q.x-qBar.x, qy=q.y-qBar.y;
+    Sxx += px*qx; Sxy += px*qy; Syx += py*qx; Syy += py*qy;
+    pNormSq += px*px+py*py;
+  }
+  const theta = Math.atan2(Sxy-Syx, Sxx+Syy);
+  const cos=Math.cos(theta), sin=Math.sin(theta);
+  let num=0;
+  for (const {p,q} of pairs){
+    const px=p.x-pBar.x, py=p.y-pBar.y, qx=q.x-qBar.x, qy=q.y-qBar.y;
+    num += qx*(cos*px-sin*py) + qy*(sin*px+cos*py);
+  }
+  const scale = pNormSq>0 ? num/pNormSq : 1;
+  return (pt) => {
+    const px=pt.x-pBar.x, py=pt.y-pBar.y;
+    return { x: qBar.x + scale*(cos*px-sin*py), y: qBar.y + scale*(sin*px+cos*py) };
+  };
+}
+
+// Shared by getAllAirportCoords() and the island/sector renderers below, so
+// any chart-pixel-space point (an airport, an island outline vertex, a
+// sector boundary vertex) goes through the exact same fit — once 2+ real
+// airports are calibrated, everything else from the chart lands in the
+// right relative spot automatically.
+function getChartTransform(){
+  const pairs = [];
+  for (const icao in state.manualCoords){
+    if (CHART_POSITIONS[icao]) pairs.push({ p: CHART_POSITIONS[icao], q: state.manualCoords[icao] });
+  }
+  return pairs.length >= 2 ? fitSimilarityTransform(pairs) : null;
+}
+
+// Combines your manually-calibrated (clicked) airports with chart-derived
+// estimates for everything else on the chart, once 2+ manual points exist.
+function getAllAirportCoords(){
+  const result = {};
+  for (const icao in state.manualCoords) result[icao] = { ...state.manualCoords[icao], estimated:false };
+  const transform = getChartTransform();
+  if (transform){
+    for (const icao in CHART_POSITIONS){
+      if (result[icao]) continue;
+      result[icao] = { ...transform(CHART_POSITIONS[icao]), estimated:true };
+    }
+  }
+  return result;
+}
+
+const state = {
+  aircraft: new Map(),
+  controllers: [],
+  manualCoords: {},   // icao -> {x,y} — only ones you've actually clicked
+  polling: false,
+  pollTimer: null,
+  origin: { x: 0, y: 0 },
+  scale: 0.02,
+  calibrating: null,
+  selectedCallsign: null,
+};
+
+try {
+  const saved = localStorage.getItem("24radar_airportCoords");
+  if (saved) state.manualCoords = JSON.parse(saved);
+} catch (e) {}
+function saveAirportCoords(){ try { localStorage.setItem("24radar_airportCoords", JSON.stringify(state.manualCoords)); } catch(e){} }
+
+// ---------- Polling ----------
+async function pollOnce(){
+  try {
+    const res = await fetch("/api/live", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    const seen = new Set();
+    for (const [callsign, d] of Object.entries(data.aircraft || {})) {
+      seen.add(callsign);
+      state.aircraft.set(callsign, {
+        callsign,
+        x: d.position?.x ?? 0, y: d.position?.y ?? 0,
+        heading: d.heading ?? 0, altitude: d.altitude ?? 0,
+        speed: d.speed ?? 0, groundSpeed: d.groundSpeed ?? 0,
+        isOnGround: !!d.isOnGround, aircraftType: d.aircraftType ?? "",
+        playerName: d.playerName ?? "", isEmergencyOccuring: !!d.isEmergencyOccuring,
+      });
+    }
+    for (const cs of Array.from(state.aircraft.keys())) {
+      if (!seen.has(cs)) state.aircraft.delete(cs);
+    }
+    state.controllers = data.controllers || [];
+    setStatus("on", "Live · updated " + new Date().toLocaleTimeString());
+  } catch (e) {
+    setStatus("err", "Poll failed: " + e.message);
+  }
+}
+function startPolling(){
+  if (state.polling) return;
+  state.polling = true;
+  document.getElementById("btnToggle").textContent = "Stop";
+  pollOnce();
+  state.pollTimer = setInterval(pollOnce, POLL_MS);
+}
+function stopPolling(){
+  state.polling = false;
+  document.getElementById("btnToggle").textContent = "Start";
+  clearInterval(state.pollTimer);
+  setStatus("mock", "Not polling");
+}
+function setStatus(kind, label){
+  document.getElementById("statusDot").className = "dot " + kind;
+  document.getElementById("statusText").textContent = label;
+}
+document.getElementById("btnToggle").addEventListener("click", () => {
+  if (state.polling) stopPolling(); else startPolling();
+});
+
+// ---------- SVG scene ----------
+const svg = document.getElementById("scene");
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs){ const e = document.createElementNS(NS,tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+function resizeSvg(){
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+}
+window.addEventListener("resize", resizeSvg);
+
+function worldToScreen(wx, wy){
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  return { sx: w/2 + (wx - state.origin.x) * state.scale, sy: h/2 + (wy - state.origin.y) * state.scale };
+}
+function screenToWorld(sx, sy){
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  return { x: state.origin.x + (sx - w/2) / state.scale, y: state.origin.y + (sy - h/2) / state.scale };
+}
+
+// Note: the whole <svg> is cleared and rebuilt every frame (see render()
+// below), so defs are rebuilt fresh each time too — no point caching them.
+function ensureDefs(){
+  const defs = el("defs", {});
+  const turb = el("filter", { id:"terrainTex", x:"-30%", y:"-30%", width:"160%", height:"160%" });
+  turb.appendChild(el("feTurbulence", { type:"fractalNoise", baseFrequency:"0.01 0.015", numOctaves:"3", seed:"11", result:"noise" }));
+  turb.appendChild(el("feColorMatrix", { in:"noise", type:"matrix", values:"0 0 0 0 0.14   0 0 0 0 0.17   0 0 0 0 0.19   0 0 0 0.5 0" }));
+  defs.appendChild(turb);
+  svg.appendChild(defs);
+}
+
+// Fallback procedural blob, used only for a calibrated/estimated airport
+// that ISLAND_SHAPES doesn't have a traced landmass for (so nothing on
+// screen floats bare with no visual context at all).
+const ISLAND_RADIUS_STUDS = 16000;
+function hashSeed(str){
+  let h = 0;
+  for (let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) | 0; }
+  return Math.abs(h);
+}
+// Small, fast, deterministic PRNG (mulberry32) seeded from hashSeed(). An
+// earlier version multiplied the seed by a large constant directly inside
+// the wobble formula, which overflowed JS's 2^53 safe-integer range for
+// most seeds and made the blob come out looking like a near-regular
+// polygon instead of organic. mulberry32 stays inside 32-bit int ops.
+function mulberry32(seed){
+  let s = seed >>> 0;
+  return function(){
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeBlobPath(cx, cy, r, seedStr){
+  const rng = mulberry32(hashSeed(seedStr));
+  const points = 10;
+  let d = "";
+  for (let i=0;i<points;i++){
+    const angle = (i/points) * Math.PI*2;
+    const wobble = 0.72 + 0.5 * rng();
+    const rad = r * wobble;
+    const x = cx + Math.cos(angle)*rad, y = cy + Math.sin(angle)*rad;
+    d += (i===0 ? "M " : "L ") + x.toFixed(1) + "," + y.toFixed(1) + " ";
+  }
+  return d + "Z";
+}
+function pathFromScreenPts(pts){
+  return pts.map((p,i) => (i===0?"M ":"L ") + p.sx.toFixed(1)+","+p.sy.toFixed(1)).join(" ") + " Z";
+}
+
+function drawLandmass(id, pathD, screenPts, estimated){
+  const clipId = "isleClip-" + id;
+  const clip = el("clipPath", { id: clipId });
+  svg.querySelector("defs").appendChild(clip);
+  clip.appendChild(el("path", { d: pathD }));
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for (const p of screenPts){ minX=Math.min(minX,p.sx); maxX=Math.max(maxX,p.sx); minY=Math.min(minY,p.sy); maxY=Math.max(maxY,p.sy); }
+  const g = el("g", { "clip-path": `url(#${clipId})`, opacity: estimated ? 0.55 : 1 });
+  g.appendChild(el("rect", { x:minX-4, y:minY-4, width:(maxX-minX)+8, height:(maxY-minY)+8, fill:"#232a33" }));
+  g.appendChild(el("rect", { x:minX-4, y:minY-4, width:(maxX-minX)+8, height:(maxY-minY)+8, filter:"url(#terrainTex)" }));
+  svg.appendChild(g);
+  svg.appendChild(el("path", { d: pathD, fill:"none", stroke:"#3a4550", "stroke-width":1.5, opacity: estimated?0.35:0.6, "stroke-dasharray": estimated ? "5,4" : "none" }));
+}
+
+// Real traced landmasses (ISLAND_SHAPES) first, transformed through the
+// same chart->world fit as the airports. Anything calibrated/estimated
+// that ISLAND_SHAPES doesn't cover falls back to the old procedural blob
+// so it still reads as an island rather than floating on bare water.
+function renderIslands(allCoords){
+  const transform = getChartTransform();
+  const covered = new Set();
+
+  if (transform){
+    for (const isle of ISLAND_SHAPES){
+      const anyKnown = isle.icaos.some(icao => allCoords[icao]);
+      if (!anyKnown) continue;
+      const estimated = isle.icaos.every(icao => !allCoords[icao] || allCoords[icao].estimated);
+      const worldPts = isle.pts.map(([x,y]) => transform({x,y}));
+      const screenPts = worldPts.map(p => worldToScreen(p.x, p.y));
+      const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+      const onScreen = screenPts.some(p => p.sx > -100 && p.sx < w+100 && p.sy > -100 && p.sy < h+100);
+      if (!onScreen) continue;
+      drawLandmass(isle.id, pathFromScreenPts(screenPts), screenPts, estimated);
+      for (const icao of isle.icaos) covered.add(icao);
+    }
+  }
+
+  for (const icao in allCoords) {
+    if (covered.has(icao)) continue;
+    const coord = allCoords[icao];
+    const p = worldToScreen(coord.x, coord.y);
+    const r = Math.min(ISLAND_RADIUS_STUDS * state.scale, 220);
+    if (r < 3) continue;
+    if (p.sx < -r-50 || p.sx > mapWrap.clientWidth+r+50 || p.sy < -r-50 || p.sy > mapWrap.clientHeight+r+50) continue;
+    const blobPath = makeBlobPath(p.sx, p.sy, r, icao);
+    drawLandmass(icao, blobPath, [{sx:p.sx-r,sy:p.sy-r},{sx:p.sx+r,sy:p.sy+r}], coord.estimated);
+  }
+}
+
+// Named sector boundaries, approximated from the actual boundary lines and
+// labels on the official enroute chart (TOKYO/SOTAF, PERTH/NORSOM,
+// KEFLAVIK, WATERLOO, CHICAGO, LAZARUS) — hand-traced polylines in the same
+// chart pixel space as CHART_POSITIONS/ISLAND_SHAPES, not exact ACC
+// boundary geometry (24data doesn't expose that; only which CTR position
+// is staffed, which is what the drawer's Airspace/Center section is for).
+const SECTOR_LINES = [
+  { name:"KEFLAVIK", pts:[[10,260],[220,270],[330,330],[400,470]] },
+  { name:"SOTAF",    pts:[[400,470],[420,300],[500,190],[620,150],[730,150]] },
+  { name:"TOKYO",    pts:[[730,150],[810,140],[900,180],[950,270]] },
+  { name:"PERTH",    pts:[[950,270],[1020,290],[1090,330],[1150,350]] },
+  { name:"NORSOM",   pts:[[950,270],[1000,400],[1010,520],[980,620]] },
+  { name:"WATERLOO", pts:[[400,470],[520,500],[650,530],[750,560],[830,600]] },
+  { name:"CHICAGO",  pts:[[10,600],[200,590],[400,590],[550,600]] },
+  { name:"LAZARUS",  pts:[[550,600],[700,650],[830,600],[980,620]] },
+];
+function renderSectorLines(){
+  const transform = getChartTransform();
+  if (!transform) return;
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  for (const line of SECTOR_LINES){
+    const screenPts = line.pts.map(([x,y]) => { const wp = transform({x,y}); return worldToScreen(wp.x, wp.y); });
+    if (!screenPts.some(p => p.sx>-100 && p.sx<w+100 && p.sy>-100 && p.sy<h+100)) continue;
+    const d = screenPts.map((p,i)=>(i===0?"M ":"L ")+p.sx.toFixed(1)+","+p.sy.toFixed(1)).join(" ");
+    svg.appendChild(el("path", { d, fill:"none", stroke:"#3d6a94", "stroke-width":1.2, opacity:0.5 }));
+    const mid = screenPts[Math.floor(screenPts.length/2)];
+    const label = el("text", { class:"sectorLabel", x:mid.sx, y:mid.sy });
+    label.textContent = line.name;
+    svg.appendChild(label);
+  }
+}
+
+function render(){
+  svg.innerHTML = "";
+  ensureDefs();
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+
+  const stepPx = STUDS_PER_NMI * 5 * state.scale;
+  if (stepPx > 20) {
+    const o = worldToScreen(0,0);
+    for (let x = o.sx % stepPx; x < w; x += stepPx) svg.appendChild(el("line",{x1:x,y1:0,x2:x,y2:h,class:"gridline"}));
+    for (let y = o.sy % stepPx; y < h; y += stepPx) svg.appendChild(el("line",{x1:0,y1:y,x2:w,y2:y,class:"gridline"}));
+  }
+
+  const allCoords = getAllAirportCoords();
+
+  const airportMap = new Map();
+  for (const pos of state.controllers) {
+    if (!airportMap.has(pos.airport)) airportMap.set(pos.airport, []);
+    airportMap.get(pos.airport).push(pos);
+  }
+
+  renderSectorLines();
+  renderIslands(allCoords);
+
+  for (const [icao, positions] of airportMap.entries()) {
+    const coord = allCoords[icao];
+    if (!coord) continue;
+    const p = worldToScreen(coord.x, coord.y);
+    if (p.sx < -100 || p.sx > w+100 || p.sy < -100 || p.sy > h+100) continue;
+
+    svg.appendChild(el("circle", { cx:p.sx, cy:p.sy, r:5, fill:"#0d1117", stroke:"var(--blue)", "stroke-width":2 }));
+
+    const fo = el("foreignObject", { x:p.sx-4, y:p.sy-56, width:190, height:50 });
+    const div = document.createElement("div");
+    div.className = "apBadge";
+    const chips = ["TWR","GND","CTR"].map(pt => {
+      const match = positions.find(x => x.position === pt);
+      if (!match) return "";
+      const on = !!match.holder;
+      return `<div class="posChip ${pt} ${on?'on':''}">${pt}</div>`;
+    }).join("");
+    const totalQueue = positions.reduce((s,x)=>s+(x.queue?.length||0),0);
+    div.innerHTML = `<div class="icaoRow"><div class="icao">${friendlyName(icao)}${coord.estimated?' <span style="color:var(--dim);font-weight:400;">(est.)</span>':''}</div><div class="q">${totalQueue?totalQueue+' queued':''}</div></div><div class="posRow">${chips}</div>`;
+    fo.appendChild(div);
+    svg.appendChild(fo);
+  }
+
+  const acLayer = el("g", {});
+  // Simple label-collision avoidance: skip a label if it would overlap one
+  // already placed this frame. Box width is estimated from the actual
+  // text length (was a bug: a fixed 130px box let long strings like
+  // "DHC-6 Twin Otter Amphibian" blow through neighboring boxes).
+  const placedLabelBoxes = [];
+  const LABEL_H = 28;
+  function estimateTextWidth(text, px){ return text.length * px * 0.58; }
+  function overlapsExisting(x, y, w){
+    for (const b of placedLabelBoxes) {
+      if (x < b.x+b.w && x+w > b.x && y < b.y+b.h && y+LABEL_H > b.y) return true;
+    }
+    return false;
+  }
+  const showDetail = state.scale > 0.008; // hide FL/type line when zoomed way out
+
+  const acList = Array.from(state.aircraft.values()).sort((a,b) => (a.isOnGround?1:0)-(b.isOnGround?1:0));
+
+  for (const ac of acList){
+    const p = worldToScreen(ac.x, ac.y);
+    if (p.sx < -40 || p.sx > w+40 || p.sy < -40 || p.sy > h+40) continue;
+    const cls = classifyAircraft(ac.aircraftType);
+    const isSelected = ac.callsign === state.selectedCallsign;
+    const color = ac.isEmergencyOccuring ? "var(--red)" : (isSelected ? "var(--text)" : (ac.isOnGround ? "var(--dim)" : "var(--blue)"));
+
+    if (isSelected) {
+      svg.appendChild(el("circle", { cx:p.sx, cy:p.sy, r:13, fill:"none", stroke:"var(--blue)", "stroke-width":1.5, opacity:0.8 }));
+    }
+
+    const hit = el("circle", { cx:p.sx, cy:p.sy, r:12, fill:"transparent", style:"cursor:pointer;" });
+    hit.addEventListener("mousedown", (e) => e.stopPropagation());
+    hit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.selectedCallsign = ac.callsign;
+      renderDetailPanel();
+    });
+    acLayer.appendChild(hit);
+
+    const grp = el("g", { transform:`translate(${p.sx},${p.sy}) rotate(${ac.heading}) scale(${cls.scale})`, style:"pointer-events:none;" });
+    if (cls.shape === "heli") {
+      grp.appendChild(el("circle", { cx:0, cy:0, r:4, fill:"none", stroke:color, "stroke-width":1.6 }));
+      grp.appendChild(el("line", { x1:-8, y1:0, x2:8, y2:0, stroke:color, "stroke-width":1.6 }));
+      grp.appendChild(el("line", { x1:0, y1:2, x2:0, y2:9, stroke:color, "stroke-width":1.6 }));
+    } else {
+      grp.appendChild(el("path", {
+        d: AIRCRAFT_SHAPES[cls.shape] || AIRCRAFT_SHAPES.narrowbody,
+        fill: color,
+      }));
+      if (cls.shape === "turboprop") {
+        grp.appendChild(el("circle", { cx:9, cy:1.7, r:1.3, fill:color }));
+        grp.appendChild(el("circle", { cx:-9, cy:1.7, r:1.3, fill:color }));
+      }
+    }
+    acLayer.appendChild(grp);
+
+    const lx = p.sx+9, ly = p.sy-9;
+    const csText = ac.callsign + (ac.isEmergencyOccuring ? " ⚠" : "");
+    const flText = "FL" + String(Math.round((ac.altitude||0)/100)).padStart(3,"0");
+    const subText = flText + (ac.aircraftType ? " · " + ac.aircraftType : "");
+    const boxW = Math.max(estimateTextWidth(csText, 11), showDetail ? estimateTextWidth(subText, 9.5) : 0) + 6;
+    if (isSelected || ac.isEmergencyOccuring || !overlapsExisting(lx, ly-11, boxW)) {
+      placedLabelBoxes.push({ x:lx, y:ly-11, w:boxW });
+      const label = el("text", { class:"acLabel"+(ac.isEmergencyOccuring?" emg":""), x:lx, y:ly });
+      label.textContent = csText;
+      acLayer.appendChild(label);
+      if (showDetail) {
+        const sub = el("text", { class:"acSub", x:lx, y:p.sy+2 });
+        sub.textContent = subText;
+        acLayer.appendChild(sub);
+      }
+    }
+  }
+  svg.appendChild(acLayer);
+}
+
+function fitToTraffic(){
+  const pts = Array.from(state.aircraft.values());
+  if (!pts.length) { alert("No aircraft data yet — start polling first."); return; }
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for (const p of pts){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const spanX = Math.max(1, maxX-minX), spanY = Math.max(1, maxY-minY);
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  const scale = Math.min(w/spanX, h/spanY) * 0.8;
+  state.origin = { x:cx, y:cy };
+  state.scale = Math.max(0.0005, Math.min(0.2, scale));
+}
+
+function renderDetailPanel(){
+  const panel = document.getElementById("detailPanel");
+  const ac = state.selectedCallsign ? state.aircraft.get(state.selectedCallsign) : null;
+  if (!ac) { panel.classList.remove("open"); return; }
+  panel.classList.add("open");
+  document.getElementById("dpCallsign").textContent = ac.callsign;
+  document.getElementById("dpCallsign").className = "cs" + (ac.isEmergencyOccuring ? " emg" : "");
+  document.getElementById("dpPilot").textContent = ac.playerName ? "Pilot: " + ac.playerName : "";
+  document.getElementById("dpEmergency").innerHTML = ac.isEmergencyOccuring ? `<div class="emgBanner">⚠ EMERGENCY DECLARED</div>` : "";
+  document.getElementById("dpGS").textContent = Math.round(ac.groundSpeed || 0) + " kts";
+  document.getElementById("dpAlt").textContent = Math.round(ac.altitude || 0) + " ft";
+  document.getElementById("dpHdg").textContent = Math.round(ac.heading || 0) + "°";
+  document.getElementById("dpType").textContent = ac.aircraftType || (ac.isOnGround ? "On ground" : "—");
+}
+document.getElementById("dpClose").addEventListener("click", () => {
+  state.selectedCallsign = null;
+  renderDetailPanel();
+});
+
+function renderDrawer(){
+  const list = state.controllers.filter(p => p.holder).sort((a,b)=>(a.airport+a.position).localeCompare(b.airport+b.position));
+  document.getElementById("drawerCount").textContent = list.length;
+  document.getElementById("ctlCount").textContent = list.length;
+  const wrap = document.getElementById("drawerList");
+  if (!list.length){ wrap.innerHTML = `<div class="empty">No controllers online.</div>`; return; }
+
+  const airports = list.filter(c => c.position !== "CTR");
+  const airspace = list.filter(c => c.position === "CTR");
+
+  const rowHtml = (c) => {
+    const mins = Math.floor((Date.now()-c.heldSince)/60000);
+    return `<div class="ctlRow"><span class="p">${friendlyName(c.airport)} ${c.position}</span><div class="t">${c.holder} · ${mins}m${c.queue?.length?' · '+c.queue.length+' queued':''}</div></div>`;
+  };
+
+  let html = "";
+  if (airports.length) html += `<div class="drawerSection">AIRPORTS</div>` + airports.map(rowHtml).join("");
+  if (airspace.length) html += `<div class="drawerSection">AIRSPACE / CENTER</div>` + airspace.map(rowHtml).join("");
+  wrap.innerHTML = html;
+}
+
+const mapWrap = document.getElementById("mapWrap");
+let dragging=false, dStart=null, originStart=null;
+mapWrap.addEventListener("mousedown",(e)=>{
+  if (state.calibrating) return;
+  dragging=true; mapWrap.classList.add("grabbing");
+  dStart={x:e.clientX,y:e.clientY}; originStart={...state.origin};
+});
+window.addEventListener("mouseup", ()=>{ dragging=false; mapWrap.classList.remove("grabbing"); });
+window.addEventListener("mousemove",(e)=>{
+  if(!dragging) return;
+  state.origin.x = originStart.x - (e.clientX-dStart.x)/state.scale;
+  state.origin.y = originStart.y - (e.clientY-dStart.y)/state.scale;
+});
+mapWrap.addEventListener("wheel",(e)=>{
+  e.preventDefault();
+  state.scale = Math.max(0.0002, Math.min(2, state.scale * (e.deltaY>0?0.9:1.1)));
+},{passive:false});
+document.getElementById("zoomIn").addEventListener("click", ()=>{ state.scale=Math.min(2,state.scale*1.25); });
+document.getElementById("zoomOut").addEventListener("click", ()=>{ state.scale=Math.max(0.0002,state.scale*0.8); });
+document.getElementById("btnFit").addEventListener("click", fitToTraffic);
+
+mapWrap.addEventListener("click", (e) => {
+  if (state.calibrating) {
+    const rect = mapWrap.getBoundingClientRect();
+    const world = screenToWorld(e.clientX-rect.left, e.clientY-rect.top);
+    state.manualCoords[state.calibrating] = { x: world.x, y: world.y };
+    saveAirportCoords();
+    state.calibrating = null;
+    document.getElementById("calibHint").classList.remove("show");
+    return;
+  }
+  if (state.selectedCallsign) { state.selectedCallsign = null; renderDetailPanel(); }
+});
+document.getElementById("btnCalib").addEventListener("click", () => {
+  const seen = Array.from(new Set(state.controllers.map(p=>p.airport)));
+  const chart = Object.keys(CHART_POSITIONS);
+  const known = Array.from(new Set([...seen, ...chart]));
+  if (!known.length) { alert("No airport ICAOs known yet — start polling first."); return; }
+  const icao = window.prompt("ICAO to calibrate (from live/chart data: " + known.map(friendlyName).join(", ") + "):");
+  if (!icao) return;
+  state.calibrating = icao.toUpperCase();
+  document.getElementById("calibHint").classList.add("show");
+});
+document.getElementById("btnDrawer").addEventListener("click", (e)=>{ document.getElementById("drawer").classList.toggle("open"); e.currentTarget.classList.toggle("active"); });
+
+function tickClock(){ document.getElementById("clockChip").textContent = new Date().toUTCString().split(" ")[4]+"Z"; }
+setInterval(tickClock,1000); tickClock();
+
+function loop(){
+  render();
+  document.getElementById("acCount").textContent = state.aircraft.size;
+  requestAnimationFrame(loop);
+}
+setInterval(renderDrawer, 1000);
+setInterval(renderDetailPanel, 1000);
+
+resizeSvg();
+renderDrawer();
+requestAnimationFrame(loop);
+startPolling();
+</script>
+</body>
+</html>

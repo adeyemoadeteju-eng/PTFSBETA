@@ -39,6 +39,7 @@
   #mapWrap.grabbing { cursor:grabbing; }
   svg#scene { width:100%; height:100%; display:block; }
   .gridline { stroke:#0c121a; stroke-width:1; }
+  .sectorLabel { font-size:10px; font-weight:600; letter-spacing:.5px; fill:#5b9bd8; opacity:0.75; }
 
   .apBadge { background:rgba(10,13,18,0.92); border:1px solid var(--border); border-radius:6px; padding:6px 8px; width:180px; user-select:none; }
   .apBadge .icaoRow { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; gap:6px; }
@@ -177,53 +178,117 @@
 const STUDS_PER_NMI = 3307.14286;
 const POLL_MS = 5000; // well within 24data's rate limits for a single viewer
 
-// Decorative landmass radius drawn around each calibrated airport, in studs.
-// This is NOT measured from real map data (none is available to me) — it's
-// a reasonable visual size so airports don't float on bare water. Treat the
-// resulting island shape as illustrative, not an accurate coastline trace.
-const ISLAND_RADIUS_STUDS = 16000;
-
 // Rough aircraft classification from the 24data `aircraftType` string, used
-// only to vary the icon (helicopter vs fixed-wing) and size (widebody vs
-// standard). This is a heuristic on the type name, not authoritative data.
+// to pick a distinct icon silhouette and a size multiplier. Heuristic on
+// the type name, not authoritative data.
 function classifyAircraft(type){
   const t = (type || "").toLowerCase();
-  if (t.includes("helicopter") || t.includes("heli")) return { kind:"heli", scale:1 };
-  const widebody = ["747","777","787","a380","a350","a340","a330","767"].some(k => t.includes(k));
-  return { kind:"jet", scale: widebody ? 1.4 : 1 };
+  if (t.includes("helicopter") || t.includes("heli")) return { shape:"heli", scale:1 };
+  if (["c17","c-17","globemaster","b1","b-1","lancer","c130","c-130","hercules","a400"].some(k=>t.includes(k)))
+    return { shape:"cargo", scale:1.3 };
+  if (["learjet","gulfstream","citation","challenger","phenom","falcon"].some(k=>t.includes(k)))
+    return { shape:"bizjet", scale:0.85 };
+  if (["atr","dhc","twin otter","caravan","cessna","piper","pa28","pa-28","kingair","king air","cirrus"].some(k=>t.includes(k)))
+    return { shape:"turboprop", scale:0.9 };
+  if (["747","777","787","a380","a350","a340","a330","767"].some(k => t.includes(k)))
+    return { shape:"widebody", scale:1.35 };
+  return { shape:"narrowbody", scale:1 };
 }
 
-// Airport ICAO -> friendly name, read off a community-made ATC24 chart the
-// user shared (credited to user_NULL83958, not an official source, and I
-// can't verify it beyond cross-checking a few codes against 24data's own
-// docs examples — e.g. IMLR/IGRV appear in the official FlightPlan sample,
-// ISAU/"Sauthemptona" matches the official ATIS sample). Treat unfamiliar
-// entries as best-effort, not guaranteed accurate.
+// One hand-authored top-down silhouette per category. Not traced from any
+// real airline's or tracker site's iconography.
+const AIRCRAFT_SHAPES = {
+  narrowbody: "M 0,-11 L 1.5,-7 L 1.5,-1 L 8,4 L 8,6 L 1.5,4 L 1.5,6.5 L 3,8.5 L 3,9.5 L 0,8.5 L -3,9.5 L -3,8.5 L -1.5,6.5 L -1.5,4 L -8,6 L -8,4 L -1.5,-1 L -1.5,-7 Z",
+  widebody:   "M 0,-13 L 2,-8 L 2,-1 L 11,5 L 11,7.5 L 2,5 L 2,7.5 L 4,10 L 4,11 L 0,9.5 L -4,11 L -4,10 L -2,7.5 L -2,5 L -11,7.5 L -11,5 L -2,-1 L -2,-8 Z",
+  turboprop:  "M 0,-9 L 1.3,-6 L 1.3,0 L 9,1.5 L 9,3 L 1.3,2 L 1.3,7 L 2.5,8.5 L 2.5,9.3 L 0,8.3 L -2.5,9.3 L -2.5,8.5 L -1.3,7 L -1.3,2 L -9,3 L -9,1.5 L -1.3,0 L -1.3,-6 Z",
+  cargo:      "M 0,-12 L 2.2,-8 L 2.2,-2 L 12,3 L 12,5.5 L 2.2,3 L 2.2,6 L 5,10 L 5,11.5 L 2,10.5 L 0,12 L -2,10.5 L -5,11.5 L -5,10 L -2.2,6 L -2.2,3 L -12,5.5 L -12,3 L -2.2,-2 L -2.2,-8 Z",
+  bizjet:     "M 0,-9 L 1,-6 L 1,3 L 6,7 L 6,8.3 L 1,6.5 L 1,8 L 2,9 L 2,9.6 L 0,8.8 L -2,9.6 L -2,9 L -1,8 L -1,6.5 L -6,8.3 L -6,7 L -1,3 L -1,-6 Z",
+};
+
+// Airport ICAO -> friendly name. Source of truth is now the official
+// "ENROUTE CHART - PTFS" (the user provided a screenshot of it directly),
+// cross-checked against 24data's own docs samples where possible. This
+// replaces the earlier community-chart-derived list, which had at least
+// one confirmed error: it had "ICAR" for Larnaca — the official chart
+// clearly labels it ILAR (right next to the "LARNACA 122.670" VOR/DME box).
+// Codes visible on the chart that I couldn't confidently read a full name
+// for (a few small "…CG"-suffixed markers near some islands) are left
+// unnamed rather than guessed.
 const ICAO_NAMES = {
   IDCS: "Saba", ITKO: "Tokyo", IPPH: "Perth", SHV: "Sea Haven",
   ILKL: "Lukla", IGRV: "Grindavik", TVO: "Tavaro", IBTH: "Saint Barthelemy",
   ISCM: "RAF Scampton", IJAF: "Al Najaf", IZOL: "Izolirani", IBLT: "Boltic",
   IMLR: "Mellor", IGAR: "Airbase Garry", IRFD: "Greater Rockford",
   ISKP: "Skopelos", ISAU: "Sauthemptona", ITRC: "Training Centre",
-  ICAR: "Larnaca", IPAP: "Paphos", IHEN: "Henstridge", IBAR: "Barra",
+  ILAR: "Larnaca", IPAP: "Paphos", IHEN: "Henstridge", IBAR: "Barra",
   IIAB: "McConnell",
 };
 function friendlyName(icao){ return ICAO_NAMES[icao] ? `${icao} — ${ICAO_NAMES[icao]}` : icao; }
 
-// Approximate pixel positions read off that same reference chart (900x665
-// image), used only as RELATIVE layout data. These are eyeballed from a
-// screenshot, not exact — but once you calibrate 2+ real airports against
-// live traffic, we can fit a scale+rotation+translation transform from this
-// chart's pixel space into real stud space and auto-place everything else
-// on the chart at roughly the right spot, without clicking each one by hand.
+// Pixel positions read directly off the official "ENROUTE CHART - PTFS"
+// image the user provided, used only as RELATIVE layout data in the
+// chart's own pixel space (chosen to roughly match that image's ~1272x953
+// canvas). Eyeballed from the chart, not exact — but once you calibrate
+// 2+ real airports against live traffic, we fit a scale+rotation+
+// translation transform from this pixel space into real stud space and
+// auto-place everything else (including the island shapes below) at
+// roughly the right spot, without clicking each one by hand.
 const CHART_POSITIONS = {
-  IDCS:{x:430,y:45}, ITKO:{x:420,y:95}, IPPH:{x:600,y:175}, SHV:{x:655,y:160},
-  ILKL:{x:660,y:210}, IGRV:{x:148,y:310}, TVO:{x:148,y:322}, IBTH:{x:495,y:300},
-  ISCM:{x:760,y:300}, IJAF:{x:760,y:330}, IZOL:{x:770,y:365}, IBLT:{x:320,y:420},
-  IMLR:{x:300,y:450}, IGAR:{x:330,y:480}, IRFD:{x:390,y:470}, ISKP:{x:595,y:415},
-  ISAU:{x:120,y:545}, ITRC:{x:400,y:540}, ICAR:{x:610,y:555}, IPAP:{x:735,y:555},
-  IHEN:{x:540,y:615}, IBAR:{x:700,y:605}, IIAB:{x:630,y:630},
+  IDCS:{x:625,y:60},  ITKO:{x:588,y:183}, IPPH:{x:822,y:205}, SHV:{x:917,y:222},
+  ILKL:{x:897,y:290}, IPCG:{x:845,y:318}, IBTH:{x:683,y:405},
+  ISCM:{x:1032,y:410},IJAF:{x:1078,y:449},IZOL:{x:1057,y:492},ISKP:{x:910,y:570},
+  IGRV:{x:118,y:305}, TVO:{x:145,y:322},
+  IMLR:{x:468,y:617}, IGAR:{x:496,y:682}, IRFD:{x:637,y:635}, IBLT:{x:640,y:435},
+  ITRC:{x:590,y:745}, ISAU:{x:135,y:725},
+  ILAR:{x:797,y:735}, IPAP:{x:1128,y:775}, IBAR:{x:888,y:819}, IHEN:{x:790,y:840},
 };
+
+// Island landmasses traced (roughly — this is a hand-eyeballed approximation
+// from the chart image, not exact vector coastline data) from the white
+// landmass shapes on the official enroute chart. One landmass can host
+// several airports (e.g. the big Rockford landmass carries IMLR/IGAR/IRFD/
+// IBLT/ITRC), which is why islands are modeled as their own shapes instead
+// of one blob per airport like the old procedural version. Points are in
+// the same chart pixel space as CHART_POSITIONS above.
+const ISLAND_SHAPES = [
+  { id:"orenji", icaos:["IDCS","ITKO"], pts:[
+    [600,25],[635,35],[645,60],[625,75],[650,95],[640,120],[615,130],[625,155],
+    [600,175],[575,190],[555,175],[560,150],[540,140],[555,115],[545,95],
+    [565,80],[570,55],[585,40],
+  ]},
+  { id:"perth", icaos:["IPPH","SHV","ILKL","IPCG"], pts:[
+    [770,165],[810,155],[850,165],[880,180],[905,200],[895,225],[915,245],
+    [905,270],[875,290],[850,305],[820,295],[800,275],[810,250],[790,230],
+    [800,205],[775,190],
+  ]},
+  { id:"stbarth", icaos:["IBTH"], pts:[
+    [655,375],[685,368],[710,385],[715,410],[695,430],[665,425],[650,400],
+  ]},
+  { id:"izolirani", icaos:["ISCM","IJAF","IZOL"], pts:[
+    [985,375],[1030,365],[1075,380],[1100,410],[1090,440],[1105,465],
+    [1085,495],[1055,505],[1025,490],[1000,465],[1010,435],[985,415],
+  ]},
+  { id:"skopelos", icaos:["ISKP"], pts:[
+    [880,545],[910,538],[935,555],[930,580],[905,590],[880,575],
+  ]},
+  { id:"grindavik", icaos:["IGRV","TVO"], pts:[
+    [95,280],[130,270],[155,285],[150,315],[165,335],[145,355],[115,350],
+    [95,325],[105,300],
+  ]},
+  { id:"rockford", icaos:["IMLR","IGAR","IRFD","IBLT","ITRC"], pts:[
+    [420,560],[470,545],[520,555],[560,540],[610,550],[650,565],[665,595],
+    [645,620],[660,650],[635,680],[600,690],[580,720],[550,730],[520,710],
+    [490,715],[460,695],[430,670],[440,640],[410,615],[400,585],
+  ]},
+  { id:"sauthemptona", icaos:["ISAU"], pts:[
+    [105,700],[140,690],[165,710],[160,740],[135,755],[105,740],[95,715],
+  ]},
+  { id:"cyprus", icaos:["ILAR","IPAP","IBAR","IHEN"], pts:[
+    [760,760],[800,745],[850,750],[900,765],[950,780],[1000,775],[1030,790],
+    [1020,815],[980,825],[940,840],[890,845],[850,835],[810,820],[770,810],
+    [750,785],
+  ]},
+];
 
 // 2D similarity transform (uniform scale + rotation + translation) fit from
 // N>=2 point pairs, least-squares for N>2. Standard Umeyama/orthogonal-
@@ -253,17 +318,26 @@ function fitSimilarityTransform(pairs){
   };
 }
 
+// Shared by getAllAirportCoords() and the island/sector renderers below, so
+// any chart-pixel-space point (an airport, an island outline vertex, a
+// sector boundary vertex) goes through the exact same fit — once 2+ real
+// airports are calibrated, everything else from the chart lands in the
+// right relative spot automatically.
+function getChartTransform(){
+  const pairs = [];
+  for (const icao in state.manualCoords){
+    if (CHART_POSITIONS[icao]) pairs.push({ p: CHART_POSITIONS[icao], q: state.manualCoords[icao] });
+  }
+  return pairs.length >= 2 ? fitSimilarityTransform(pairs) : null;
+}
+
 // Combines your manually-calibrated (clicked) airports with chart-derived
 // estimates for everything else on the chart, once 2+ manual points exist.
 function getAllAirportCoords(){
   const result = {};
   for (const icao in state.manualCoords) result[icao] = { ...state.manualCoords[icao], estimated:false };
-  const pairs = [];
-  for (const icao in state.manualCoords){
-    if (CHART_POSITIONS[icao]) pairs.push({ p: CHART_POSITIONS[icao], q: state.manualCoords[icao] });
-  }
-  if (pairs.length >= 2){
-    const transform = fitSimilarityTransform(pairs);
+  const transform = getChartTransform();
+  if (transform){
     for (const icao in CHART_POSITIONS){
       if (result[icao]) continue;
       result[icao] = { ...transform(CHART_POSITIONS[icao]), estimated:true };
@@ -370,79 +444,124 @@ function ensureDefs(){
   svg.appendChild(defs);
 }
 
-// Decorative islands — rendered for every airport we have a real (manually
-// calibrated) or chart-derived (estimated) position for, not just ones with
-// active ATC right now, so the archipelago actually looks populated. See
-// ISLAND_RADIUS_STUDS note above for what the shape itself is (and isn't)
-// based on. Estimated islands are drawn a bit fainter, with a dashed ring.
-// Small deterministic string hash → used to seed a stable (not re-randomized
-// every frame) organic blob shape per airport, so islands look like varied
-// coastlines instead of identical circles, without needing real geo data.
+// Fallback procedural blob, used only for a calibrated/estimated airport
+// that ISLAND_SHAPES doesn't have a traced landmass for (so nothing on
+// screen floats bare with no visual context at all).
+const ISLAND_RADIUS_STUDS = 16000;
 function hashSeed(str){
   let h = 0;
   for (let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) | 0; }
   return Math.abs(h);
 }
+// Small, fast, deterministic PRNG (mulberry32) seeded from hashSeed(). An
+// earlier version multiplied the seed by a large constant directly inside
+// the wobble formula, which overflowed JS's 2^53 safe-integer range for
+// most seeds and made the blob come out looking like a near-regular
+// polygon instead of organic. mulberry32 stays inside 32-bit int ops.
+function mulberry32(seed){
+  let s = seed >>> 0;
+  return function(){
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function makeBlobPath(cx, cy, r, seedStr){
-  const seed = hashSeed(seedStr);
+  const rng = mulberry32(hashSeed(seedStr));
   const points = 10;
   let d = "";
   for (let i=0;i<points;i++){
     const angle = (i/points) * Math.PI*2;
-    // pseudo-random but stable per-point radius variation
-    const wobble = 0.72 + 0.5 * (((seed * (i+1) * 2654435761) % 1000) / 1000);
+    const wobble = 0.72 + 0.5 * rng();
     const rad = r * wobble;
     const x = cx + Math.cos(angle)*rad, y = cy + Math.sin(angle)*rad;
     d += (i===0 ? "M " : "L ") + x.toFixed(1) + "," + y.toFixed(1) + " ";
   }
   return d + "Z";
 }
+function pathFromScreenPts(pts){
+  return pts.map((p,i) => (i===0?"M ":"L ") + p.sx.toFixed(1)+","+p.sy.toFixed(1)).join(" ") + " Z";
+}
 
+function drawLandmass(id, pathD, screenPts, estimated){
+  const clipId = "isleClip-" + id;
+  const clip = el("clipPath", { id: clipId });
+  svg.querySelector("defs").appendChild(clip);
+  clip.appendChild(el("path", { d: pathD }));
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for (const p of screenPts){ minX=Math.min(minX,p.sx); maxX=Math.max(maxX,p.sx); minY=Math.min(minY,p.sy); maxY=Math.max(maxY,p.sy); }
+  const g = el("g", { "clip-path": `url(#${clipId})`, opacity: estimated ? 0.55 : 1 });
+  g.appendChild(el("rect", { x:minX-4, y:minY-4, width:(maxX-minX)+8, height:(maxY-minY)+8, fill:"#232a33" }));
+  g.appendChild(el("rect", { x:minX-4, y:minY-4, width:(maxX-minX)+8, height:(maxY-minY)+8, filter:"url(#terrainTex)" }));
+  svg.appendChild(g);
+  svg.appendChild(el("path", { d: pathD, fill:"none", stroke:"#3a4550", "stroke-width":1.5, opacity: estimated?0.35:0.6, "stroke-dasharray": estimated ? "5,4" : "none" }));
+}
+
+// Real traced landmasses (ISLAND_SHAPES) first, transformed through the
+// same chart->world fit as the airports. Anything calibrated/estimated
+// that ISLAND_SHAPES doesn't cover falls back to the old procedural blob
+// so it still reads as an island rather than floating on bare water.
 function renderIslands(allCoords){
+  const transform = getChartTransform();
+  const covered = new Set();
+
+  if (transform){
+    for (const isle of ISLAND_SHAPES){
+      const anyKnown = isle.icaos.some(icao => allCoords[icao]);
+      if (!anyKnown) continue;
+      const estimated = isle.icaos.every(icao => !allCoords[icao] || allCoords[icao].estimated);
+      const worldPts = isle.pts.map(([x,y]) => transform({x,y}));
+      const screenPts = worldPts.map(p => worldToScreen(p.x, p.y));
+      const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+      const onScreen = screenPts.some(p => p.sx > -100 && p.sx < w+100 && p.sy > -100 && p.sy < h+100);
+      if (!onScreen) continue;
+      drawLandmass(isle.id, pathFromScreenPts(screenPts), screenPts, estimated);
+      for (const icao of isle.icaos) covered.add(icao);
+    }
+  }
+
   for (const icao in allCoords) {
+    if (covered.has(icao)) continue;
     const coord = allCoords[icao];
     const p = worldToScreen(coord.x, coord.y);
-    // Clamp on-screen size so a fixed stud radius can't balloon to fill the
-    // whole viewport when zoomed in tight on a small traffic cluster.
     const r = Math.min(ISLAND_RADIUS_STUDS * state.scale, 220);
     if (r < 3) continue;
     if (p.sx < -r-50 || p.sx > mapWrap.clientWidth+r+50 || p.sy < -r-50 || p.sy > mapWrap.clientHeight+r+50) continue;
     const blobPath = makeBlobPath(p.sx, p.sy, r, icao);
-    const clipId = "isleClip-" + icao;
-    const clip = el("clipPath", { id: clipId });
-    svg.querySelector("defs").appendChild(clip);
-    clip.appendChild(el("path", { d: blobPath }));
-    const g = el("g", { "clip-path": `url(#${clipId})`, opacity: coord.estimated ? 0.55 : 1 });
-    g.appendChild(el("rect", { x:p.sx-r, y:p.sy-r, width:r*2, height:r*2, fill:"#232a33" }));
-    g.appendChild(el("rect", { x:p.sx-r, y:p.sy-r, width:r*2, height:r*2, filter:"url(#terrainTex)" }));
-    svg.appendChild(g);
-    svg.appendChild(el("path", { d: blobPath, fill:"none", stroke:"#3a4550", "stroke-width":1.5, opacity: coord.estimated?0.35:0.6, "stroke-dasharray": coord.estimated ? "5,4" : "none" }));
+    drawLandmass(icao, blobPath, [{sx:p.sx-r,sy:p.sy-r},{sx:p.sx+r,sy:p.sy+r}], coord.estimated);
   }
 }
 
-// Purely decorative sector-boundary-style lines, in the visual spirit of
-// ATC chart overlays — NOT real Area Control Centre boundary geometry
-// (24data doesn't expose that; only which CTR position is staffed, which
-// is what the drawer's Airspace/Center section is for). Regenerated from
-// the current spread of known airports so it roughly scales with the map
-// instead of being a fixed shape unrelated to what's on screen.
-function renderSectorLines(allCoords){
-  const keys = Object.keys(allCoords);
-  if (keys.length < 2) return;
-  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  for (const k of keys){ const c=allCoords[k]; minX=Math.min(minX,c.x); maxX=Math.max(maxX,c.x); minY=Math.min(minY,c.y); maxY=Math.max(maxY,c.y); }
-  const spanX = Math.max(1,maxX-minX), spanY = Math.max(1,maxY-minY);
-  const pad = 0.5;
-  const lines = [
-    { color:"#c9821a", pts:[[0.15,-pad],[0.35,0.2],[0.5,0.15],[0.65,0.35],[0.6,0.6],[0.8,0.75],[1+pad,0.7]] },
-    { color:"#c9821a", pts:[[0.35,0.2],[0.3,0.5],[0.4,0.8],[0.3,1+pad]] },
-    { color:"#2f9e64", pts:[[-pad,0.55],[0.2,0.5],[0.45,0.65],[0.7,0.55],[0.9,0.65],[1+pad,0.55]] },
-    { color:"#2f9e64", pts:[[0.65,0.35],[0.75,0.15],[0.9,-pad]] },
-  ];
-  for (const line of lines){
-    const pts = line.pts.map(([fx,fy]) => worldToScreen(minX + fx*spanX, minY + fy*spanY));
-    const d = pts.map((p,i)=> (i===0?"M ":"L ") + p.sx.toFixed(1)+","+p.sy.toFixed(1)).join(" ");
-    svg.appendChild(el("path", { d, fill:"none", stroke:line.color, "stroke-width":1.3, opacity:0.55 }));
+// Named sector boundaries, approximated from the actual boundary lines and
+// labels on the official enroute chart (TOKYO/SOTAF, PERTH/NORSOM,
+// KEFLAVIK, WATERLOO, CHICAGO, LAZARUS) — hand-traced polylines in the same
+// chart pixel space as CHART_POSITIONS/ISLAND_SHAPES, not exact ACC
+// boundary geometry (24data doesn't expose that; only which CTR position
+// is staffed, which is what the drawer's Airspace/Center section is for).
+const SECTOR_LINES = [
+  { name:"KEFLAVIK", pts:[[10,260],[220,270],[330,330],[400,470]] },
+  { name:"SOTAF",    pts:[[400,470],[420,300],[500,190],[620,150],[730,150]] },
+  { name:"TOKYO",    pts:[[730,150],[810,140],[900,180],[950,270]] },
+  { name:"PERTH",    pts:[[950,270],[1020,290],[1090,330],[1150,350]] },
+  { name:"NORSOM",   pts:[[950,270],[1000,400],[1010,520],[980,620]] },
+  { name:"WATERLOO", pts:[[400,470],[520,500],[650,530],[750,560],[830,600]] },
+  { name:"CHICAGO",  pts:[[10,600],[200,590],[400,590],[550,600]] },
+  { name:"LAZARUS",  pts:[[550,600],[700,650],[830,600],[980,620]] },
+];
+function renderSectorLines(){
+  const transform = getChartTransform();
+  if (!transform) return;
+  const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+  for (const line of SECTOR_LINES){
+    const screenPts = line.pts.map(([x,y]) => { const wp = transform({x,y}); return worldToScreen(wp.x, wp.y); });
+    if (!screenPts.some(p => p.sx>-100 && p.sx<w+100 && p.sy>-100 && p.sy<h+100)) continue;
+    const d = screenPts.map((p,i)=>(i===0?"M ":"L ")+p.sx.toFixed(1)+","+p.sy.toFixed(1)).join(" ");
+    svg.appendChild(el("path", { d, fill:"none", stroke:"#3d6a94", "stroke-width":1.2, opacity:0.5 }));
+    const mid = screenPts[Math.floor(screenPts.length/2)];
+    const label = el("text", { class:"sectorLabel", x:mid.sx, y:mid.sy });
+    label.textContent = line.name;
+    svg.appendChild(label);
   }
 }
 
@@ -466,7 +585,7 @@ function render(){
     airportMap.get(pos.airport).push(pos);
   }
 
-  renderSectorLines(allCoords);
+  renderSectorLines();
   renderIslands(allCoords);
 
   for (const [icao, positions] of airportMap.entries()) {
@@ -494,23 +613,20 @@ function render(){
 
   const acLayer = el("g", {});
   // Simple label-collision avoidance: skip a label if it would overlap one
-  // already placed this frame. This is what was actually broken in your
-  // screenshot — every aircraft always drew a 2-line label regardless of
-  // how many neighbors were nearby, so tight clusters turned into a wall
-  // of stacked text. Icons still always render; only text gets thinned.
+  // already placed this frame. Box width is estimated from the actual
+  // text length (was a bug: a fixed 130px box let long strings like
+  // "DHC-6 Twin Otter Amphibian" blow through neighboring boxes).
   const placedLabelBoxes = [];
-  const LABEL_W = 130, LABEL_H = 28;
-  function overlapsExisting(x, y){
+  const LABEL_H = 28;
+  function estimateTextWidth(text, px){ return text.length * px * 0.58; }
+  function overlapsExisting(x, y, w){
     for (const b of placedLabelBoxes) {
-      if (x < b.x+b.w && x+LABEL_W > b.x && y < b.y+b.h && y+LABEL_H > b.y) return true;
+      if (x < b.x+b.w && x+w > b.x && y < b.y+b.h && y+LABEL_H > b.y) return true;
     }
     return false;
   }
   const showDetail = state.scale > 0.008; // hide FL/type line when zoomed way out
 
-  // Sort so selected/emergency aircraft (if any logic added later) or just
-  // a stable order get label priority; for now, on-ground/slow first so
-  // parked clusters don't hog space over aircraft actually in the air.
   const acList = Array.from(state.aircraft.values()).sort((a,b) => (a.isOnGround?1:0)-(b.isOnGround?1:0));
 
   for (const ac of acList){
@@ -524,7 +640,6 @@ function render(){
       svg.appendChild(el("circle", { cx:p.sx, cy:p.sy, r:13, fill:"none", stroke:"var(--blue)", "stroke-width":1.5, opacity:0.8 }));
     }
 
-    // Invisible larger hit-circle so clicking near a small icon still selects it.
     const hit = el("circle", { cx:p.sx, cy:p.sy, r:12, fill:"transparent", style:"cursor:pointer;" });
     hit.addEventListener("mousedown", (e) => e.stopPropagation());
     hit.addEventListener("click", (e) => {
@@ -535,31 +650,35 @@ function render(){
     acLayer.appendChild(hit);
 
     const grp = el("g", { transform:`translate(${p.sx},${p.sy}) rotate(${ac.heading}) scale(${cls.scale})`, style:"pointer-events:none;" });
-    if (cls.kind === "heli") {
+    if (cls.shape === "heli") {
       grp.appendChild(el("circle", { cx:0, cy:0, r:4, fill:"none", stroke:color, "stroke-width":1.6 }));
       grp.appendChild(el("line", { x1:-8, y1:0, x2:8, y2:0, stroke:color, "stroke-width":1.6 }));
       grp.appendChild(el("line", { x1:0, y1:2, x2:0, y2:9, stroke:color, "stroke-width":1.6 }));
     } else {
-      // Generic top-down airplane silhouette — same basic shape family as
-      // Font Awesome's "plane", Material's "flight" icon, FR24, etc. My own
-      // path, not traced from any of them.
       grp.appendChild(el("path", {
-        d: "M 0,-11 L 1.5,-7 L 1.5,-1 L 8,4 L 8,6 L 1.5,4 L 1.5,6.5 L 3,8.5 L 3,9.5 L 0,8.5 L -3,9.5 L -3,8.5 L -1.5,6.5 L -1.5,4 L -8,6 L -8,4 L -1.5,-1 L -1.5,-7 Z",
+        d: AIRCRAFT_SHAPES[cls.shape] || AIRCRAFT_SHAPES.narrowbody,
         fill: color,
       }));
+      if (cls.shape === "turboprop") {
+        grp.appendChild(el("circle", { cx:9, cy:1.7, r:1.3, fill:color }));
+        grp.appendChild(el("circle", { cx:-9, cy:1.7, r:1.3, fill:color }));
+      }
     }
     acLayer.appendChild(grp);
 
     const lx = p.sx+9, ly = p.sy-9;
-    if (ac.isEmergencyOccuring || !overlapsExisting(lx, ly-11)) {
-      placedLabelBoxes.push({ x:lx, y:ly-11, w:LABEL_W, h:LABEL_H });
+    const csText = ac.callsign + (ac.isEmergencyOccuring ? " ⚠" : "");
+    const flText = "FL" + String(Math.round((ac.altitude||0)/100)).padStart(3,"0");
+    const subText = flText + (ac.aircraftType ? " · " + ac.aircraftType : "");
+    const boxW = Math.max(estimateTextWidth(csText, 11), showDetail ? estimateTextWidth(subText, 9.5) : 0) + 6;
+    if (isSelected || ac.isEmergencyOccuring || !overlapsExisting(lx, ly-11, boxW)) {
+      placedLabelBoxes.push({ x:lx, y:ly-11, w:boxW });
       const label = el("text", { class:"acLabel"+(ac.isEmergencyOccuring?" emg":""), x:lx, y:ly });
-      label.textContent = ac.callsign + (ac.isEmergencyOccuring ? " ⚠" : "");
+      label.textContent = csText;
       acLayer.appendChild(label);
       if (showDetail) {
-        const fl = "FL" + String(Math.round((ac.altitude||0)/100)).padStart(3,"0");
         const sub = el("text", { class:"acSub", x:lx, y:p.sy+2 });
-        sub.textContent = fl + (ac.aircraftType ? " · " + ac.aircraftType : "");
+        sub.textContent = subText;
         acLayer.appendChild(sub);
       }
     }
@@ -606,9 +725,6 @@ function renderDrawer(){
   const wrap = document.getElementById("drawerList");
   if (!list.length){ wrap.innerHTML = `<div class="empty">No controllers online.</div>`; return; }
 
-  // "CTR" is the real position type 24data uses for Area Control Centres —
-  // splitting on it (rather than guessing sector boundary shapes) is the
-  // accurate way to separate airspace/center staffing from airport ground ops.
   const airports = list.filter(c => c.position !== "CTR");
   const airspace = list.filter(c => c.position === "CTR");
 
@@ -654,7 +770,6 @@ mapWrap.addEventListener("click", (e) => {
     document.getElementById("calibHint").classList.remove("show");
     return;
   }
-  // Clicked empty water (aircraft hit-circles stopPropagation before this fires) — deselect.
   if (state.selectedCallsign) { state.selectedCallsign = null; renderDetailPanel(); }
 });
 document.getElementById("btnCalib").addEventListener("click", () => {
